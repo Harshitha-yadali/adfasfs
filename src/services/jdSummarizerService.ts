@@ -1,9 +1,7 @@
 // src/services/jdSummarizerService.ts
-// JD Summarization Service using EdenAI (OpenAI gpt-4o-mini)
+// JD Summarization Service using EdenAI via Supabase Edge Function proxy
 
-// Use environment variable - DO NOT hard-code
-const EDENAI_API_KEY = import.meta.env.VITE_EDENAI_API_KEY || '';
-const EDENAI_SUMMARIZE_URL = 'https://api.edenai.run/v2/text/summarize';
+import { edenai } from './aiProxyService';
 
 export interface JdSummary {
   summary: string;
@@ -14,49 +12,17 @@ export interface JdSummary {
 }
 
 /**
- * Summarize a Job Description using EdenAI (OpenAI provider)
+ * Summarize a Job Description using EdenAI via Supabase Edge Function proxy
  * Returns a 2-4 sentence summary focused on responsibilities, core skills, and domain
  */
 export const summarizeJd = async (jobDescription: string): Promise<string> => {
-  if (!EDENAI_API_KEY) {
-    console.warn('EdenAI API key not configured. Skipping JD summarization.');
-    return '';
-  }
-
   if (!jobDescription || jobDescription.trim().length < 50) {
     console.warn('Job description too short for summarization.');
     return '';
   }
 
   try {
-    const response = await fetch(EDENAI_SUMMARIZE_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${EDENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        providers: 'openai',
-        text: jobDescription,
-        output_sentences: 3,
-        language: 'en',
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`EdenAI Summarize error: ${response.status} - ${errorText}`);
-      return '';
-    }
-
-    const result = await response.json();
-    
-    // Extract summary from OpenAI provider response
-    const summary = result?.openai?.result || 
-                    result?.openai?.summary || 
-                    result?.result || 
-                    '';
-    
+    const summary = await edenai.summarize(jobDescription, 'medium');
     return summary.trim();
   } catch (error: any) {
     console.error('EdenAI JD Summarization error:', error);

@@ -1,15 +1,14 @@
 /**
  * EdenAI Text Generation Service
- * Replaces all OpenRouter API calls with EdenAI's text generation
+ * Uses Supabase Edge Function proxy for secure API calls
  */
 
-const EDENAI_API_KEY = import.meta.env.VITE_EDENAI_API_KEY;
-const EDENAI_API_URL = 'https://api.edenai.run/v2/text/chat';
+import { edenai } from './aiProxyService';
 
 // Available providers: openai/gpt-4o-mini, google/gemini-1.5-flash, etc.
 const DEFAULT_PROVIDER = 'openai/gpt-4o-mini';
 
-console.log('EdenAI Text Service: API Key configured:', !!EDENAI_API_KEY);
+console.log('EdenAI Text Service: Using Supabase Edge Function proxy');
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -31,7 +30,7 @@ interface EdenAITextResponse {
 }
 
 /**
- * Generate text using EdenAI's chat API
+ * Generate text using EdenAI via Supabase Edge Function proxy
  */
 export const generateText = async (
   prompt: string,
@@ -47,80 +46,13 @@ export const generateText = async (
     maxTokens = 4000
   } = options;
 
-  console.log('🤖 EdenAI Text Generation Request');
+  console.log('🤖 EdenAI Text Generation Request (via proxy)');
   console.log('   Provider:', provider);
-  console.log('   Temperature:', temperature);
-  console.log('   Max Tokens:', maxTokens);
   console.log('   Prompt length:', prompt.length, 'chars');
 
-  if (!EDENAI_API_KEY) {
-    console.error('❌ EdenAI API key not configured');
-    throw new Error('EdenAI API key is not configured');
-  }
-
-  const response = await fetch(EDENAI_API_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${EDENAI_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      providers: provider,
-      text: prompt,
-      chatbot_global_action: 'You are a helpful AI assistant for resume optimization and career guidance.',
-      previous_history: [],
-      temperature,
-      max_tokens: maxTokens
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('EdenAI API error:', errorText);
-    throw new Error(`EdenAI API error: ${response.status} - ${errorText}`);
-  }
-
-  const data: EdenAITextResponse = await response.json();
-  
-  console.log('📋 EdenAI Raw Response:', JSON.stringify(data).slice(0, 1000));
-  
-  // Extract generated text from the provider's response
-  // EdenAI returns the key as-is (e.g., 'openai/gpt-4o-mini')
-  let providerResponse = data[provider];
-  
-  // Also try without the model suffix for backwards compatibility
-  if (!providerResponse && provider.includes('/')) {
-    const baseProvider = provider.split('/')[0];
-    providerResponse = data[baseProvider];
-  }
-  
-  if (!providerResponse) {
-    console.error('❌ No response from provider:', provider);
-    console.error('   Available keys:', Object.keys(data));
-    console.error('   Full response:', JSON.stringify(data).slice(0, 1000));
-    
-    // Try to find any provider response
-    const availableProviders = Object.keys(data).filter(k => data[k]?.generated_text);
-    if (availableProviders.length > 0) {
-      const fallbackProvider = availableProviders[0];
-      console.log(`🔄 Using fallback provider: ${fallbackProvider}`);
-      return data[fallbackProvider].generated_text || '';
-    }
-    
-    throw new Error(`No response from provider: ${provider}. Response: ${JSON.stringify(data).slice(0, 500)}`);
-  }
-
-  // Check for errors in provider response
-  if (providerResponse.status === 'fail' || providerResponse.error) {
-    console.error('❌ Provider returned error:', providerResponse.error);
-    throw new Error(`Provider error: ${providerResponse.error?.message || 'Unknown error'}`);
-  }
-
-  const generatedText = providerResponse.generated_text || '';
+  const generatedText = await edenai.chat(prompt, { provider, temperature, maxTokens });
   
   if (!generatedText || generatedText.trim().length === 0) {
-    console.error('❌ Empty response from provider');
-    console.error('   Provider response:', JSON.stringify(providerResponse).slice(0, 500));
     throw new Error('Empty response from AI provider');
   }
   
@@ -131,7 +63,7 @@ export const generateText = async (
 };
 
 /**
- * Chat with context using EdenAI
+ * Chat with context using EdenAI via proxy
  */
 export const chat = async (
   messages: ChatMessage[],
@@ -147,63 +79,15 @@ export const chat = async (
     maxTokens = 4000
   } = options;
 
-  if (!EDENAI_API_KEY) {
-    throw new Error('EdenAI API key is not configured');
-  }
-
-  // Convert messages to EdenAI format
+  // Convert messages to a single prompt for the proxy
   const systemMessage = messages.find(m => m.role === 'system')?.content || '';
-  const previousHistory = messages
-    .filter(m => m.role !== 'system')
-    .slice(0, -1)
-    .map(m => ({
-      role: m.role,
-      message: m.content
-    }));
-  
   const lastMessage = messages[messages.length - 1];
-
-  const response = await fetch(EDENAI_API_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${EDENAI_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      providers: provider,
-      text: lastMessage.content,
-      chatbot_global_action: systemMessage || 'You are a helpful AI assistant.',
-      previous_history: previousHistory,
-      temperature,
-      max_tokens: maxTokens
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('EdenAI Chat API error:', errorText);
-    throw new Error(`EdenAI API error: ${response.status} - ${errorText}`);
-  }
-
-  const data: EdenAITextResponse = await response.json();
   
-  // Try the exact provider key first, then base provider
-  let providerResponse = data[provider];
-  if (!providerResponse && provider.includes('/')) {
-    const baseProvider = provider.split('/')[0];
-    providerResponse = data[baseProvider];
-  }
-  
-  if (!providerResponse) {
-    // Try to find any provider response
-    const availableProviders = Object.keys(data).filter(k => data[k]?.generated_text);
-    if (availableProviders.length > 0) {
-      return data[availableProviders[0]].generated_text || '';
-    }
-    throw new Error(`No response from provider: ${provider}`);
-  }
+  const fullPrompt = systemMessage 
+    ? `${systemMessage}\n\n${lastMessage.content}`
+    : lastMessage.content;
 
-  return providerResponse.generated_text || '';
+  return await edenai.chat(fullPrompt, { provider, temperature, maxTokens });
 };
 
 /**

@@ -13,13 +13,13 @@ import {
   SOFT_SKILLS
 } from '../constants/skillsTaxonomy';
 
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
+import { openrouter } from './aiProxyService';
 
-console.log('GeminiService: Using OpenRouter AI with Gemini 2.5 Flash Lite');
+console.log('GeminiService: Using OpenRouter AI via Supabase Edge Function proxy');
 
 // --- CONSTANTS FOR ERROR HANDLING AND RETRIES ---
-export const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-export const MAX_INPUT_LENGTH = 50000; // Max characters for combined resume and JD input to the AI model
+export const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"; // Kept for reference
+export const MAX_INPUT_LENGTH = 50000;
 export const MAX_RETRIES = 3;
 export const INITIAL_RETRY_DELAY_MS = 1000;
 // --- END ---
@@ -67,70 +67,19 @@ const deepCleanComments = (val: any): any => {
   return val;
 };
 
-// --- OpenRouter safeFetch function with retry logic ---
+// --- OpenRouter safeFetch function via Supabase Edge Function proxy ---
 const safeFetch = async (options: { prompt: string }, maxRetries = MAX_RETRIES): Promise<{ content: string }> => {
   let retries = 0;
   let delay = INITIAL_RETRY_DELAY_MS;
 
   while (retries < maxRetries) {
     try {
-      const res = await fetch(OPENROUTER_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://primoboost.ai',
-          'X-Title': 'PrimoBoost AI'
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a professional resume optimization assistant. Always respond with valid JSON only.'
-            },
-            {
-              role: 'user',
-              content: options.prompt
-            }
-          ],
-          temperature: 0.3,
-          max_tokens: 8000
-        })
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        let errorMessage = `OpenRouter API error: ${res.status}`;
-
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = `OpenRouter API error: ${errorJson.error?.message || errorText} (Status: ${res.status})`;
-        } catch {
-          errorMessage = `OpenRouter API error: ${errorText} (Status: ${res.status})`;
-        }
-
-        if (res.status === 400) {
-          throw new Error(`OpenRouter API: Bad Request. ${errorMessage}`);
-        }
-        if (res.status === 401) {
-          throw new Error(`OpenRouter API: Invalid API Key. Please check your VITE_OPENROUTER_API_KEY. ${errorMessage}`);
-        }
-        if (res.status === 429 || res.status >= 500) {
-          retries++;
-          if (retries >= maxRetries) {
-            throw new Error(`OpenRouter API error: Failed after ${maxRetries} retries. ${errorMessage}`);
-          }
-          console.warn(`OpenRouter API: ${errorMessage}. Retrying in ${delay / 1000}s... (Attempt ${retries}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          delay *= 2;
-          continue;
-        }
-        throw new Error(errorMessage);
-      }
-      
-      const data = await res.json();
-      const content = data?.choices?.[0]?.message?.content;
+      // Use the proxy service instead of direct API call
+      const content = await openrouter.chatWithSystem(
+        'You are a professional resume optimization assistant. Always respond with valid JSON only.',
+        options.prompt,
+        { model: 'google/gemini-2.5-flash', temperature: 0.3 }
+      );
       
       if (!content) {
         throw new Error('No content returned from OpenRouter');
@@ -138,13 +87,14 @@ const safeFetch = async (options: { prompt: string }, maxRetries = MAX_RETRIES):
       
       return { content };
     } catch (err: any) {
-      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      if (err.message.includes('429') || err.message.includes('500') || 
+          err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
         retries++;
         if (retries >= maxRetries) {
-          throw new Error(`Network/Fetch error: Failed after ${maxRetries} retries. ${err.message}`);
+          throw new Error(`OpenRouter API error: Failed after ${maxRetries} retries. ${err.message}`);
         }
-        console.warn(`Network/Fetch error: ${err.message}. Retrying in ${delay / 1000}s... (Attempt ${retries}/${maxRetries})`);
-        await new Promise(r => setTimeout(r, delay));
+        console.warn(`OpenRouter API error: ${err.message}. Retrying in ${delay / 1000}s... (Attempt ${retries}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
         delay *= 2;
         continue;
       }

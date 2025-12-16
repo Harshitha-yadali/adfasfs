@@ -1,7 +1,7 @@
 // src/services/edenResumeParserService.ts
-// Resume Parser - Uses Mistral OCR + openai/gpt-4o-mini Chat API
-// Step 1: Extract text using Mistral OCR (async for multi-page PDFs)
-// Step 2: Parse extracted text with Chat API (openai/gpt-4o-mini)
+// Resume Parser - Uses Supabase Edge Function proxy for secure API calls
+// Step 1: Extract text using Mistral OCR (via proxy)
+// Step 2: Parse extracted text with Chat API (via proxy)
 
 import {
   ResumeData,
@@ -11,12 +11,7 @@ import {
   Skill,
   Certification,
 } from '../types/resume';
-
-const EDENAI_API_KEY = import.meta.env.VITE_EDENAI_API_KEY || '';
-const EDENAI_OCR_ASYNC_URL = 'https://api.edenai.run/v2/ocr/ocr_async'; // For multi-page PDFs with Mistral
-const EDENAI_CHAT_URL = 'https://api.edenai.run/v2/text/chat';
-
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { extractTextWithOCR, chatWithAI } from './edenaiProxyService';
 
 export interface ParsedResume extends ResumeData {
   parsedText: string;
@@ -26,13 +21,9 @@ export interface ParsedResume extends ResumeData {
 
 /**
  * Main function: Parse resume using Mistral OCR + openai/gpt-4o-mini
- * Flow: Mistral OCR (async) → Chat API parsing
+ * Flow: Mistral OCR (via Edge Function) → Chat API parsing (via Edge Function)
  */
 export const parseResumeFromFile = async (file: File): Promise<ParsedResume> => {
-  if (!EDENAI_API_KEY) {
-    throw new Error('EdenAI API key not configured. Please check your .env file.');
-  }
-
   let extractedText = '';
 
   try {
@@ -40,9 +31,9 @@ export const parseResumeFromFile = async (file: File): Promise<ParsedResume> => 
     if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
       extractedText = await file.text();
     } else {
-      // Use Mistral OCR for PDF/DOCX
+      // Use Mistral OCR via Edge Function proxy
       try {
-        extractedText = await extractTextWithMistralOCR(file);
+        extractedText = await extractTextWithOCR(file);
       } catch (ocrError: any) {
         // Fallback: Try reading as text (for text-based PDFs)
         try {
@@ -66,7 +57,7 @@ export const parseResumeFromFile = async (file: File): Promise<ParsedResume> => 
       throw new Error('Could not extract enough text from file. Please ensure the file contains readable text.');
     }
 
-    // Step 2: Parse text with Chat API (openai/gpt-4o-mini)
+    // Step 2: Parse text with Chat API via Edge Function proxy
     const parsedData = await parseTextWithChatAPI(extractedText);
     
     // Validate we got real data
@@ -84,157 +75,11 @@ export const parseResumeFromFile = async (file: File): Promise<ParsedResume> => 
 };
 
 /**
- * Extract text using Mistral OCR (async API for multi-page support)
- * Mistral is the most cost-effective provider ($1 per 1K pages)
- */
-const extractTextWithMistralOCR = async (file: File, retryCount = 0): Promise<string> => {
-  const MAX_RETRIES = 2;
-
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('providers', 'mistral');
-  formData.append('language', 'en');
-
-  try {
-    const response = await fetch(EDENAI_OCR_ASYNC_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${EDENAI_API_KEY}` },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Mistral OCR API Error:', response.status, errorText);
-      
-      if (response.status === 401 || response.status === 403) {
-        throw new Error('EdenAI API authentication failed. Please check your API key.');
-      }
-      if (response.status === 429) {
-        throw new Error('EdenAI API rate limit exceeded. Please try again later.');
-      }
-      if (response.status === 400) {
-        throw new Error('Invalid file format. Please upload a PDF or DOCX file.');
-      }
-      
-      if (retryCount < MAX_RETRIES) {
-        await delay(2000);
-        return extractTextWithMistralOCR(file, retryCount + 1);
-      }
-      throw new Error(`Mistral OCR API failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    // Async API returns a job ID - poll for results
-    if (result.public_id) {
-      return await pollAsyncOCRResult(result.public_id);
-    }
-
-    // If sync response, extract text directly
-    return extractTextFromOCRResult(result);
-  } catch (error: any) {
-    console.error('Mistral OCR Error:', error.message);
-    if (retryCount < MAX_RETRIES) {
-      await delay(2000);
-      return extractTextWithMistralOCR(file, retryCount + 1);
-    }
-    throw error;
-  }
-};
-
-/**
- * Poll for async OCR job results
- */
-const pollAsyncOCRResult = async (jobId: string, maxAttempts = 30): Promise<string> => {
-  const pollUrl = `https://api.edenai.run/v2/ocr/ocr_async/${jobId}`;
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const response = await fetch(pollUrl, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${EDENAI_API_KEY}` },
-      });
-
-      if (!response.ok) {
-        await delay(2000);
-        continue;
-      }
-
-      const result = await response.json();
-      
-      if (result.status === 'finished') {
-        return extractTextFromOCRResult(result.results || result);
-      }
-      
-      if (result.status === 'failed') {
-        throw new Error('Mistral OCR job failed');
-      }
-      
-      // Job still processing
-      await delay(2000);
-    } catch (error: any) {
-      await delay(2000);
-    }
-  }
-  
-  throw new Error('Mistral OCR job timed out');
-};
-
-/**
- * Extract text from OCR result
- */
-const extractTextFromOCRResult = (result: any): string => {
-  const extractFromProvider = (prov: any, _provName: string): string | null => {
-    if (!prov) return null;
-    
-    if (prov.status === 'fail' || prov.error) {
-      return null;
-    }
-    
-    // Direct text field
-    if (prov.text && typeof prov.text === 'string' && prov.text.trim().length > 10) {
-      return prov.text;
-    }
-    
-    // Multi-page: pages array
-    if (prov.pages && Array.isArray(prov.pages)) {
-      const allText = prov.pages
-        .map((p: any) => p.text || p.content || '')
-        .filter((t: string) => t.trim().length > 0)
-        .join('\n\n');
-      if (allText.length > 10) {
-        return allText;
-      }
-    }
-    
-    // raw_text field
-    if (prov.raw_text && typeof prov.raw_text === 'string' && prov.raw_text.trim().length > 10) {
-      return prov.raw_text;
-    }
-    
-    return null;
-  };
-
-  // Try Mistral first
-  const mistralText = extractFromProvider(result.mistral, 'mistral');
-  if (mistralText) return mistralText;
-  
-  // Fallback: try any available provider
-  for (const key of Object.keys(result)) {
-    if (key === 'mistral') continue;
-    const text = extractFromProvider(result[key], key);
-    if (text) return text;
-  }
-
-  throw new Error('No text extracted from Mistral OCR');
-};
-
-
-/**
- * Parse text with Chat API (openai/gpt-4o-mini)
+ * Parse text with Chat API via Edge Function proxy
  */
 const parseTextWithChatAPI = async (text: string, retryCount = 0): Promise<ParsedResume> => {
   const MAX_RETRIES = 2;
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
   const prompt = `Parse this resume and extract ALL information. Return ONLY valid JSON.
 
@@ -261,46 +106,14 @@ Return JSON with this exact structure:
 
 IMPORTANT: Extract ACTUAL data from the resume text. Do NOT use placeholder values like "John Doe".`;
 
-  const requestBody = {
-    providers: 'openai/gpt-4o-mini',
-    text: prompt,
-    chatbot_global_action: 'You are an expert resume parser. Extract real data from the resume. Return only valid JSON, no markdown.',
-    previous_history: [],
-    temperature: 0.1,
-    max_tokens: 4000,
-  };
-
   try {
-    const response = await fetch(EDENAI_CHAT_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${EDENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
+    // Use Edge Function proxy instead of direct API call
+    const content = await chatWithAI(prompt, {
+      provider: 'openai/gpt-4o-mini',
+      temperature: 0.1,
+      maxTokens: 4000,
     });
 
-    if (!response.ok) {
-      if (retryCount < MAX_RETRIES) {
-        await delay(2000);
-        return parseTextWithChatAPI(text, retryCount + 1);
-      }
-      throw new Error(`Chat API failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    const providerResult = result?.['openai/gpt-4o-mini'] || result?.['openai__gpt_4o_mini'];
-    
-    if (!providerResult) {
-      throw new Error('No provider result');
-    }
-
-    if (providerResult.status === 'fail') {
-      throw new Error(providerResult.error?.message || 'Provider failed');
-    }
-
-    const content = providerResult.generated_text || '';
     if (!content) {
       throw new Error('Empty response from Chat API');
     }
@@ -311,7 +124,7 @@ IMPORTANT: Extract ACTUAL data from the resume text. Do NOT use placeholder valu
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
-    return mapToResume(parsed, text, result);
+    return mapToResume(parsed, text, { proxy: true });
   } catch (error: any) {
     if (retryCount < MAX_RETRIES) {
       await delay(2000);

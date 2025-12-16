@@ -1,10 +1,7 @@
 // src/services/edenModerationService.ts
-// EdenAI Moderation & Spell Check Service
+// EdenAI Moderation & Spell Check Service via Supabase Edge Function proxy
 
-// Use environment variable - DO NOT hard-code
-const EDENAI_API_KEY = import.meta.env.VITE_EDENAI_API_KEY || '';
-const EDENAI_MODERATION_URL = 'https://api.edenai.run/v2/text/moderation';
-const EDENAI_SPELL_CHECK_URL = 'https://api.edenai.run/v2/text/spell_check';
+import { edenai } from './aiProxyService';
 
 // Moderation result interface
 export interface ModerationResult {
@@ -32,38 +29,15 @@ export interface SpellCorrection {
 }
 
 /**
- * Check text for unsafe/offensive content using EdenAI Moderation
+ * Check text for unsafe/offensive content using EdenAI Moderation via proxy
  */
 export const moderateText = async (text: string): Promise<ModerationResult> => {
-  if (!EDENAI_API_KEY) {
-    console.warn('EdenAI API key not configured. Skipping moderation.');
-    return { isSafe: true, flaggedCategories: [], confidence: 0 };
-  }
-
   if (!text || text.trim().length < 10) {
     return { isSafe: true, flaggedCategories: [], confidence: 1 };
   }
 
   try {
-    const response = await fetch(EDENAI_MODERATION_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${EDENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        providers: 'openai',
-        text: text.slice(0, 10000), // Limit text length
-        language: 'en',
-      }),
-    });
-
-    if (!response.ok) {
-      console.error(`EdenAI Moderation error: ${response.status}`);
-      return { isSafe: true, flaggedCategories: [], confidence: 0 };
-    }
-
-    const result = await response.json();
+    const result = await edenai.moderate(text);
     const openaiResult = result?.openai || {};
     
     // Check if content is flagged
@@ -92,38 +66,15 @@ export const moderateText = async (text: string): Promise<ModerationResult> => {
 };
 
 /**
- * Check and correct spelling/grammar using EdenAI Spell Check
+ * Check and correct spelling/grammar using EdenAI Spell Check via proxy
  */
 export const spellCheck = async (text: string): Promise<SpellCheckResult> => {
-  if (!EDENAI_API_KEY) {
-    console.warn('EdenAI API key not configured. Skipping spell check.');
-    return { correctedText: text, corrections: [], hasCorrections: false };
-  }
-
   if (!text || text.trim().length < 10) {
     return { correctedText: text, corrections: [], hasCorrections: false };
   }
 
   try {
-    const response = await fetch(EDENAI_SPELL_CHECK_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${EDENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        providers: 'openai',
-        text: text.slice(0, 10000), // Limit text length
-        language: 'en',
-      }),
-    });
-
-    if (!response.ok) {
-      console.error(`EdenAI Spell Check error: ${response.status}`);
-      return { correctedText: text, corrections: [], hasCorrections: false };
-    }
-
-    const result = await response.json();
+    const result = await edenai.spellCheck(text);
     const openaiResult = result?.openai || {};
     
     // Get corrected text
@@ -160,7 +111,7 @@ export const spellCheck = async (text: string): Promise<SpellCheckResult> => {
  */
 const preserveMetrics = (original: string, corrected: string): string => {
   // Extract all metrics from original
-  const metricPatterns = [
+  const metricPatterns: RegExp[] = [
     /\d+%/g,                    // Percentages: 40%
     /\$[\d,]+[KMB]?/gi,         // Currency: $1M, $50K
     /[\d,]+\+?/g,               // Numbers: 10,000+
@@ -171,8 +122,8 @@ const preserveMetrics = (original: string, corrected: string): string => {
   let result = corrected;
   
   for (const pattern of metricPatterns) {
-    const originalMatches = original.match(pattern) || [];
-    const correctedMatches = result.match(pattern) || [];
+    const originalMatches: string[] = original.match(pattern) || [];
+    const correctedMatches: string[] = result.match(pattern) || [];
     
     // If a metric was changed, try to restore it
     for (const origMetric of originalMatches) {
