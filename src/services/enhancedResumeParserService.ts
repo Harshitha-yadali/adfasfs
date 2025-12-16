@@ -264,13 +264,17 @@ export class EnhancedResumeParserService {
     confidence: number;
     rawResponse: any;
   }> {
-    console.log('🔍 Enhanced OCR extraction...');
+    console.log('🔍 Enhanced OCR extraction via Supabase proxy...');
 
-    const formData = new FormData();
-    // Use proxy service for OCR
     try {
       const extractedText = await edenai.extractText(file);
-      return extractedText;
+      
+      // edenai.extractText returns a string, wrap it in expected format
+      return {
+        text: extractedText,
+        confidence: extractedText.length > 500 ? 0.85 : 0.7,
+        rawResponse: { text: extractedText, source: 'proxy' },
+      };
     } catch (error) {
       console.error('❌ Enhanced OCR failed:', error);
       throw error;
@@ -283,9 +287,6 @@ export class EnhancedResumeParserService {
   private static async pollEnhancedOCRResult(_jobId: string): Promise<any> {
     // Polling is now handled internally by the proxy service
     return {};
-    }
-    
-    throw new Error('OCR job timed out - document may be too complex');
   }
 
   /**

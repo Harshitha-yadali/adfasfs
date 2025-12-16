@@ -67,10 +67,13 @@ async function handleEdenAI(action: string, params: any) {
     }
 
     case 'ocr_status': {
+      console.log('Checking OCR status for job:', params.jobId);
       const res = await fetch(`https://api.edenai.run/v2/ocr/ocr_async/${params.jobId}`, {
         headers: { Authorization: `Bearer ${API_KEY}` },
       });
-      return jsonResponse(await res.json(), res.status);
+      const data = await res.json();
+      console.log('OCR status response:', JSON.stringify(data).slice(0, 500));
+      return jsonResponse(data, res.status);
     }
 
     case 'chat': {

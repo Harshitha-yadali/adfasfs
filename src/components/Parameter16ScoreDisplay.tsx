@@ -92,11 +92,27 @@ export const Parameter16ScoreDisplay: React.FC<Parameter16ScoreDisplayProps> = (
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="text-center">
-            <div className={`text-2xl font-bold ${getScoreColor(overallAfter || 0)}`}>
-              {overallAfter || 0}%
+          {/* Show Before → After scores */}
+          <div className="flex items-center gap-2">
+            {overallBefore !== undefined && overallBefore > 0 && (
+              <>
+                <div className="text-center">
+                  <div className={`text-lg font-bold ${getScoreColor(overallBefore)} opacity-60`}>
+                    {overallBefore}%
+                  </div>
+                  <div className="text-xs text-gray-500">Before</div>
+                </div>
+                <span className="text-gray-500">→</span>
+              </>
+            )}
+            <div className="text-center">
+              <div className={`text-2xl font-bold ${getScoreColor(overallAfter || 0)}`}>
+                {overallAfter || 0}%
+              </div>
+              <div className="text-xs text-gray-400">
+                {overallBefore !== undefined && overallBefore > 0 ? 'After' : 'Overall'}
+              </div>
             </div>
-            <div className="text-xs text-gray-400">Overall</div>
           </div>
           
           <div className="flex-1 grid grid-cols-8 gap-1">
