@@ -1,0 +1,15 @@
+# Netlify redirects file for Single Page Application
+# This ensures all routes are handled by React Router
+
+# Handle all routes by serving index.html
+/*    /index.html   200
+
+# Optional: Handle API routes if you add them later
+# /api/*  https://your-api-domain.com/api/:splat  200
+
+# Optional: Handle specific file extensions normally
+# *.js    /assets/:splat  200
+# *.css   /assets/:splat  200
+# *.png   /assets/:splat  200
+# *.jpg   /assets/:splat  200
+# *.svg   /assets/:splat  200
