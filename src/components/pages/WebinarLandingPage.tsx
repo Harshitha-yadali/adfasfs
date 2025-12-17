@@ -286,10 +286,8 @@ export const WebinarLandingPage: React.FC<WebinarLandingPageProps> = ({ onShowAu
       throw new Error('Failed to create payment order - no order ID received');
     }
 
-    // Step 4: Get Razorpay key (prefer test key when test mode)
-    const razorpayKey = isTestCheckout
-      ? (import.meta.env.VITE_RAZORPAY_TEST_KEY_ID || import.meta.env.VITE_RAZORPAY_KEY_ID)
-      : import.meta.env.VITE_RAZORPAY_KEY_ID;
+    // Step 4: Get Razorpay key from edge function response (secure - from Supabase secrets)
+    const razorpayKey = orderData.keyId;
     if (!razorpayKey) {
       throw new Error('Razorpay key not configured');
     }
