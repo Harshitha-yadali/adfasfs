@@ -33,6 +33,13 @@ import { QualitativeAnalyzer } from './analyzers/qualitativeAnalyzer';
 import { ScoreMapperService } from './scoreMapperService';
 import { enhancedDocumentProcessor } from './enhancedDocumentProcessor';
 import { parsingMetricsService } from './parsingMetricsService';
+import { 
+  detectCandidateLevel, 
+  getWeightsForLevel, 
+  matchKeywordsWithSynonyms,
+  generateActionableRecommendations,
+  CandidateLevel 
+} from './resumeScoringFixes';
 
 // ============================================================================
 // TYPES
@@ -682,84 +689,80 @@ export class EnhancedScoringService {
   }
 
   /**
-   * FIXED: Detect if this is a fresher role - corrected logic order and patterns
+   * FIXED: Detect if this is a fresher role - uses enhanced candidate level detection
+   * Now works properly in Normal Mode (without JD) by analyzing resume content
    */
   private static detectFresherRole(resumeData?: ResumeData, jobDescription?: string, userType?: 'fresher' | 'experienced' | 'student'): boolean {
     // Explicit override from frontend (highest priority)
     if (userType === 'fresher' || userType === 'student') return true;
     if (userType === 'experienced') return false;
 
-    if (!jobDescription) {
-      const totalExp = this.calculateTotalExperience(resumeData?.workExperience || []);
-      return totalExp < 1.5;
-    }
-
-    const jd = jobDescription.toLowerCase();
-
-    // STEP 1: Strong fresher indicators (highest priority) - FIXED ORDER
-    const fresherKeywords = [
-      'fresher', 'freshers', 'entry level', 'graduate', 'new grad',
-      'campus hire', 'trainee', 'intern', '0-1 years', '0–1 years',
-      '0-2 years', '0–2 years', 'no experience required', 'recent graduate',
-      'entry-level', 'junior', 'graduate program'
-    ];
+    // FIXED: Use enhanced candidate level detection from resume content
+    // This works even without JD by analyzing work experience, projects, education
+    const resumeText = this.extractBasicText(resumeData || {} as ResumeData);
+    const candidateLevelResult = detectCandidateLevel(resumeText, {
+      workExperience: resumeData?.workExperience,
+      education: resumeData?.education,
+      projects: resumeData?.projects,
+      certifications: resumeData?.certifications
+    });
     
-    // Check for specific fresher-only associate roles
-    const fresherAssociatePatterns = [
-      'associate trainee', 'associate intern', 'associate graduate',
-      'entry level associate', 'junior associate'
-    ];
-    
-    if (fresherAssociatePatterns.some(pattern => jd.includes(pattern))) {
+    // If candidate is detected as fresher from resume content, return true
+    if (candidateLevelResult.level === 'fresher') {
+      console.log('[EnhancedScoringService] Detected fresher from resume content:', candidateLevelResult.signals);
       return true;
     }
-    if (fresherKeywords.some(k => jd.includes(k))) return true;
 
-    // STEP 2: Strong experienced indicators - FIXED REGEX
-    // Check for experienced role titles first
-    const experiencedRoleTitles = [
-      'analyst', 'associate analyst', 'senior', 'lead', 'manager', 'director',
-      'specialist', 'consultant', 'coordinator', 'supervisor', 'engineer'
-    ];
-    
-    // If it's an analyst role (like Associate Analyst), it's typically experienced
-    if (experiencedRoleTitles.some(title => jd.includes(title))) {
-      // Double-check it's not explicitly entry-level
-      if (!jd.includes('entry level') && !jd.includes('trainee') && !jd.includes('intern')) {
-        return false; // Experienced role
-      }
-    }
-    
-    // Only match explicit year requirements, not general "experience" mentions
-    const expRequirementPatterns = [
-      /(\d+)\+?\s*years?\s+(?:of\s+)?(?:work\s+|professional\s+|relevant\s+)?experience\s+required/gi,
-      /minimum\s+(\d+)\+?\s*years?/gi,
-      /at\s+least\s+(\d+)\+?\s*years?/gi,
-      /(\d+)\+\s*years?\s+experience/gi
-    ];
-    
-    for (const pattern of expRequirementPatterns) {
-      const match = jd.match(pattern);
-      if (match) {
-        const years = parseInt(match[1]);
-        if (years >= 2) return false; // Definitely experienced role
-      }
-    }
+    // If we have a JD, also check JD-based indicators
+    if (jobDescription) {
+      const jd = jobDescription.toLowerCase();
 
-    // STEP 3: Check for range patterns like "1-3 years", "2-4 years"
-    const rangePattern = /(\d+)\s*[-–to]\s*(\d+)\s*years?/gi;
-    const rangeMatch = jd.match(rangePattern);
-    if (rangeMatch) {
-      const yearMatch = rangeMatch[0].match(/(\d+)/);
-      if (yearMatch) {
-        const minYears = parseInt(yearMatch[1]);
-        if (minYears >= 2) return false; // Starts at 2+ years = experienced
+      // Strong fresher indicators in JD
+      const fresherKeywords = [
+        'fresher', 'freshers', 'entry level', 'graduate', 'new grad',
+        'campus hire', 'trainee', 'intern', '0-1 years', '0–1 years',
+        '0-2 years', '0–2 years', 'no experience required', 'recent graduate',
+        'entry-level', 'junior', 'graduate program'
+      ];
+      
+      if (fresherKeywords.some(k => jd.includes(k))) return true;
+
+      // Check for explicit experience requirements
+      const expRequirementPatterns = [
+        /(\d+)\+?\s*years?\s+(?:of\s+)?(?:work\s+|professional\s+|relevant\s+)?experience/gi,
+        /minimum\s+(\d+)\+?\s*years?/gi,
+        /at\s+least\s+(\d+)\+?\s*years?/gi,
+      ];
+      
+      for (const pattern of expRequirementPatterns) {
+        const match = jd.match(pattern);
+        if (match) {
+          const years = parseInt(match[1]);
+          if (years >= 2) return false; // Experienced role
+        }
       }
     }
 
-    // STEP 4: If JD does NOT explicitly require 2+ years → treat as fresher-friendly
-    // This handles cases like "Data Analyst" with no explicit experience requirement
-    return true;
+    // Default: if candidate level is junior, treat as fresher-friendly
+    return candidateLevelResult.level === 'junior';
+  }
+  
+  /**
+   * Get candidate level for weight adjustment
+   */
+  private static getCandidateLevel(resumeData?: ResumeData, jobDescription?: string, userType?: 'fresher' | 'experienced' | 'student'): CandidateLevel {
+    if (userType === 'fresher' || userType === 'student') return 'fresher';
+    if (userType === 'experienced') return 'mid';
+    
+    const resumeText = this.extractBasicText(resumeData || {} as ResumeData);
+    const result = detectCandidateLevel(resumeText, {
+      workExperience: resumeData?.workExperience,
+      education: resumeData?.education,
+      projects: resumeData?.projects,
+      certifications: resumeData?.certifications
+    });
+    
+    return result.level;
   }
 
   /**
