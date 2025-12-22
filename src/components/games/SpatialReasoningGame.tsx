@@ -219,7 +219,7 @@ export const SpatialReasoningGame: React.FC<SpatialReasoningGameProps> = ({
             </div>
           </div>
 
-          {/* Rotate button - cyan border when tile selected */}
+          {/* Rotate button */}
           <button
             onClick={handleRotate}
             disabled={!store.selectedTileId || store.status !== 'playing'}

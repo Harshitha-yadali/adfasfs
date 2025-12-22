@@ -14,6 +14,7 @@
 
 import { ResumeData } from '../types/resume';
 import { semanticMatchingService } from './semanticMatchingService';
+import { OptimizerValidationService, ValidationResult } from './optimizerValidation';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -120,6 +121,8 @@ export interface OptimizationResult {
   scoringBreakdown: ScoringBreakdown;
   finalScore: number;
   processingTime: number;
+  // NEW: Authenticity validation to prevent over-optimization
+  authenticityValidation?: ValidationResult;
 }
 
 export interface ValidationReport {
@@ -310,8 +313,29 @@ export class JDBasedResumeOptimizer {
       optimizedResume
     );
     
+    // Step 10: NEW - Authenticity Validation (prevents over-optimization)
+    const authenticityValidation = OptimizerValidationService.validate({
+      original: resumeData,
+      optimized: optimizedResume,
+    });
+    
+    console.log(`🔒 Authenticity Validation: ${authenticityValidation.isValid ? 'PASSED' : 'FAILED'} (${authenticityValidation.score}%)`);
+    
+    if (!authenticityValidation.isValid) {
+      console.warn('⚠️ Authenticity Issues:', authenticityValidation.issues.map(i => i.message));
+    }
+    
+    // Adjust final score based on authenticity
+    let adjustedFinalScore = scoringBreakdown.totalScore;
+    if (!authenticityValidation.isValid) {
+      // Penalize over-optimized resumes
+      const penalty = Math.min(15, authenticityValidation.issues.filter(i => i.type === 'critical').length * 5);
+      adjustedFinalScore = Math.max(0, adjustedFinalScore - penalty);
+      console.log(`📉 Score adjusted for authenticity issues: ${scoringBreakdown.totalScore} → ${adjustedFinalScore}`);
+    }
+    
     const processingTime = Date.now() - startTime;
-    console.log(`✅ Optimization Complete: ${scoringBreakdown.totalScore}% in ${processingTime}ms`);
+    console.log(`✅ Optimization Complete: ${adjustedFinalScore}% in ${processingTime}ms`);
     
     return {
       optimizedResume,
@@ -322,9 +346,13 @@ export class JDBasedResumeOptimizer {
       atsSimulation,
       validationReport,
       warningReport,
-      scoringBreakdown,
-      finalScore: scoringBreakdown.totalScore,
-      processingTime
+      scoringBreakdown: {
+        ...scoringBreakdown,
+        totalScore: adjustedFinalScore,
+      },
+      finalScore: adjustedFinalScore,
+      processingTime,
+      authenticityValidation,
     };
   }
 

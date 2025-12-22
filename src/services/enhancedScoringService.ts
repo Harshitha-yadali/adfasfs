@@ -35,11 +35,17 @@ import { enhancedDocumentProcessor } from './enhancedDocumentProcessor';
 import { parsingMetricsService } from './parsingMetricsService';
 import { 
   detectCandidateLevel, 
-  getWeightsForLevel, 
-  matchKeywordsWithSynonyms,
-  generateActionableRecommendations,
   CandidateLevel 
 } from './resumeScoringFixes';
+import {
+  assessInputQuality,
+  applyNormalizedWeights,
+  calculateAdjustedScore,
+  calculateAlignedConfidence,
+  getAlignedMatchBand,
+  getAlignedInterviewProbability,
+  InputQualityAssessment,
+} from './normalModeScoring';
 
 // ============================================================================
 // TYPES
@@ -160,6 +166,37 @@ export class EnhancedScoringService {
   static async calculateScore(input: EnhancedScoringInput): Promise<EnhancedComprehensiveScore> {
     const { resumeText, resumeData, jobDescription, extractionMode } = input;
 
+    // =========================================================================
+    // FIX: Input Quality Assessment (prevents static fallback scoring)
+    // =========================================================================
+    const inputQuality = assessInputQuality({
+      resumeText,
+      resumeData,
+      userType: input.userType,
+    });
+    
+    console.log('[EnhancedScoringService] Input Quality:', inputQuality.quality, 
+      '| Score:', inputQuality.qualityScore, 
+      '| Valid:', inputQuality.isValid);
+    
+    // If input is invalid, return a low score with clear feedback
+    if (!inputQuality.isValid) {
+      return this.createInvalidInputScore(inputQuality, extractionMode);
+    }
+
+    // =========================================================================
+    // FIX: Detect Candidate Level for Weight Normalization
+    // =========================================================================
+    const candidateLevelResult = detectCandidateLevel(resumeText, {
+      workExperience: resumeData?.workExperience,
+      education: resumeData?.education,
+      projects: resumeData?.projects,
+      certifications: resumeData?.certifications,
+    });
+    
+    console.log('[EnhancedScoringService] Candidate Level:', candidateLevelResult.level,
+      '| Confidence:', candidateLevelResult.confidence,
+      '| Signals:', candidateLevelResult.signals.slice(0, 2));
 
     // =========================================================================
     // TIER 1: Basic Structure Analysis (20 metrics)
@@ -299,6 +336,11 @@ export class EnhancedScoringService {
 
     // Adjust tier weights based on role type
     tierScores = this.adjustTierWeightsForRole(tierScores, isFresherRole);
+    
+    // =========================================================================
+    // FIX: Apply Candidate Level Normalization
+    // =========================================================================
+    tierScores = applyNormalizedWeights(tierScores, candidateLevelResult.level);
 
     // =========================================================================
     // Calculate Big 5 Critical Metrics
@@ -314,16 +356,45 @@ export class EnhancedScoringService {
     // Calculate Final Score
     // =========================================================================
     const scoreResult = ScoreMapperService.mapScore(tierScores, redFlagResult.redFlags);
+    
+    // =========================================================================
+    // FIX: Apply Quality-Based Score Adjustment
+    // =========================================================================
+    const scoreAdjustment = calculateAdjustedScore(
+      scoreResult.finalScore,
+      inputQuality,
+      candidateLevelResult.level
+    );
+    
+    const adjustedFinalScore = scoreAdjustment.finalScore;
+    
+    // =========================================================================
+    // FIX: Calculate Aligned Confidence (matches score bands)
+    // =========================================================================
+    const alignedConfidence = calculateAlignedConfidence(
+      adjustedFinalScore,
+      inputQuality,
+      !!jobDescription
+    );
+    
+    const alignedMatchBand = getAlignedMatchBand(adjustedFinalScore);
+    const alignedInterviewProbability = getAlignedInterviewProbability(adjustedFinalScore);
+    
+    console.log('[EnhancedScoringService] Score Adjustment:', 
+      'Base:', scoreResult.finalScore,
+      '→ Adjusted:', adjustedFinalScore,
+      '| Confidence:', alignedConfidence,
+      '| Band:', alignedMatchBand);
 
     // =========================================================================
     // Build Enhanced Comprehensive Score
     // =========================================================================
     const enhancedScore: EnhancedComprehensiveScore = {
       // Base ComprehensiveScore fields
-      overall: Math.round(scoreResult.finalScore),
-      match_band: scoreResult.matchBand,
-      interview_probability_range: scoreResult.interviewProbability,
-      confidence: this.calculateConfidence(resumeText, resumeData, jobDescription, scoreResult.finalScore),
+      overall: adjustedFinalScore,
+      match_band: alignedMatchBand,
+      interview_probability_range: alignedInterviewProbability,
+      confidence: alignedConfidence,
       rubric_version: '2.0-220metrics',
       weighting_mode: jobDescription ? 'JD' : 'GENERAL',
       extraction_mode: extractionMode,
@@ -351,6 +422,97 @@ export class EnhancedScoringService {
     };
 
     return enhancedScore;
+  }
+
+  // ============================================================================
+  // INVALID INPUT HANDLING
+  // ============================================================================
+
+  /**
+   * Create a score result for invalid/empty inputs
+   * CRITICAL FIX: Returns appropriate low score instead of static ~54
+   */
+  private static createInvalidInputScore(
+    inputQuality: InputQualityAssessment,
+    extractionMode: ExtractionMode
+  ): EnhancedComprehensiveScore {
+    // Calculate a score based on what little content exists
+    let baseScore = inputQuality.qualityScore * 0.4; // Max 40 for invalid input
+    
+    // Add small bonuses for any detected content
+    const { contentMetrics } = inputQuality;
+    if (contentMetrics.hasContactInfo) baseScore += 3;
+    if (contentMetrics.hasSkills) baseScore += 5;
+    if (contentMetrics.hasEducation) baseScore += 3;
+    if (contentMetrics.wordCount > 100) baseScore += 5;
+    
+    const finalScore = Math.max(0, Math.min(35, Math.round(baseScore))); // Cap at 35 for invalid
+    
+    return {
+      overall: finalScore,
+      match_band: 'Very Poor',
+      interview_probability_range: '0-3%',
+      confidence: 'Low',
+      rubric_version: '2.0-220metrics',
+      weighting_mode: 'GENERAL',
+      extraction_mode: extractionMode,
+      trimmed: false,
+      job_title: undefined,
+      breakdown: [],
+      missing_keywords: [],
+      actions: [
+        'Resume appears incomplete or invalid',
+        ...inputQuality.issues.slice(0, 3),
+        'Please upload a complete resume with standard sections',
+      ],
+      example_rewrites: {},
+      notes: [
+        '⚠️ Input Quality: ' + inputQuality.quality,
+        `Word count: ${inputQuality.contentMetrics.wordCount}`,
+        `Sections detected: ${inputQuality.contentMetrics.sectionCount}`,
+      ],
+      analysis: `Resume quality assessment: ${inputQuality.quality}. ${inputQuality.issues.join('. ')}`,
+      keyStrengths: [],
+      improvementAreas: inputQuality.issues,
+      recommendations: [
+        'Ensure resume has standard sections (Experience, Education, Skills)',
+        'Add contact information (email, phone)',
+        'Include relevant work experience or projects',
+        'List technical and soft skills',
+      ],
+      tier_scores: {} as TierScores,
+      critical_metrics: {
+        jd_keywords_match: { score: 0, max_score: 5, percentage: 0, status: 'poor', details: 'Cannot assess' },
+        technical_skills_alignment: { score: 0, max_score: 5, percentage: 0, status: 'poor', details: 'Cannot assess' },
+        quantified_results_presence: { score: 0, max_score: 3, percentage: 0, status: 'poor', details: 'Cannot assess' },
+        job_title_relevance: { score: 0, max_score: 3, percentage: 0, status: 'poor', details: 'Cannot assess' },
+        experience_relevance: { score: 0, max_score: 3, percentage: 0, status: 'poor', details: 'Cannot assess' },
+        total_critical_score: 0,
+      },
+      red_flags: [{
+        type: 'formatting',
+        id: 1,
+        name: 'Incomplete Resume',
+        severity: 'critical',
+        description: 'Resume appears incomplete or improperly formatted',
+        recommendation: 'Upload a complete resume with all standard sections',
+        penalty: -20,
+      }],
+      red_flag_penalty: -20,
+      auto_reject_risk: true,
+      missing_keywords_enhanced: [],
+      section_order_issues: inputQuality.issues.map((issue, idx) => ({
+        section: 'general',
+        currentPosition: idx,
+        expectedPosition: 0,
+        penalty: -2,
+      })),
+      format_issues: [{
+        type: 'image' as const,
+        description: 'Resume content is insufficient for proper analysis',
+        severity: 'high' as const,
+      }],
+    };
   }
 
   // ============================================================================
