@@ -261,7 +261,7 @@ export const edenai = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        providers: options.provider || 'openai/gpt-4o-mini',
+        providers: options.provider || 'mistral/mistral-large-latest',
         text: prompt,
         chatbot_global_action: 'You are an expert assistant.',
         previous_history: [],
@@ -271,8 +271,13 @@ export const edenai = {
     });
 
     const result = await response.json();
+    console.log('💬 Chat response:', JSON.stringify(result).slice(0, 500));
+    
     const providerKey = Object.keys(result).find(k => result[k]?.generated_text);
     if (providerKey) return result[providerKey].generated_text;
+    
+    // Log the full response for debugging
+    console.error('💬 No generated_text found in response:', JSON.stringify(result, null, 2));
     throw new Error('No response from EdenAI chat');
   },
 
@@ -282,13 +287,16 @@ export const edenai = {
   async chatViaProxy(prompt: string, options: { provider?: string; temperature?: number; maxTokens?: number } = {}) {
     const result = await callProxy('edenai', 'chat', {
       prompt,
-      provider: options.provider || 'openai/gpt-4o-mini',
+      provider: options.provider || 'mistral/mistral-large-latest',
       temperature: options.temperature || 0.1,
       maxTokens: options.maxTokens || 4000,
     });
 
     const providerKey = Object.keys(result).find(k => result[k]?.generated_text);
     if (providerKey) return result[providerKey].generated_text;
+    
+    // Log the full response for debugging
+    console.error('💬 No generated_text found in proxy response:', JSON.stringify(result, null, 2));
     throw new Error('No response from EdenAI chat');
   },
 

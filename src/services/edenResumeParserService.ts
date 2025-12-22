@@ -112,7 +112,7 @@ IMPORTANT: Extract ACTUAL data from the resume text. Do NOT use placeholder valu
   try {
     // Use Edge Function proxy instead of direct API call
     const content = await chatWithAI(prompt, {
-      provider: 'openai/gpt-4o-mini',
+      provider: 'mistral/mistral-large-latest',
       temperature: 0.1,
       maxTokens: 4000,
     });
