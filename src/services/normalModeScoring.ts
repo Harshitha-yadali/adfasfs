@@ -260,6 +260,12 @@ export function applyNormalizedWeights(
   const normalizedScores: TierScores = {} as TierScores;
   
   for (const [key, tier] of Object.entries(tierScores)) {
+    // CRITICAL FIX: Check if tier exists and has required properties
+    if (!tier || typeof tier.percentage !== 'number') {
+      console.warn(`[normalModeScoring] Invalid tier score for ${key}:`, tier);
+      continue; // Skip invalid tier scores
+    }
+    
     const tierKey = key as keyof NormalizedWeights;
     const newWeight = weights[tierKey] ?? tier.weight;
     

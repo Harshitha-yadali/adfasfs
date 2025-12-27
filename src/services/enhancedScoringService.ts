@@ -201,27 +201,39 @@ export class EnhancedScoringService {
     // =========================================================================
     // TIER 1: Basic Structure Analysis (20 metrics)
     // =========================================================================
-    const basicStructureInput: BasicStructureInput = {
-      resumeText,
-      extractionMode,
-      filename: input.filename,
-      pageCount: input.pageCount,
-      fileSize: input.fileSize,
-      hasImages: input.hasImages,
-      hasTables: input.hasTables,
-      hasMultipleColumns: input.hasMultipleColumns,
-      hasColors: input.hasColors,
-      hasGraphics: input.hasGraphics,
-    };
-    const basicStructureResult = BasicStructureAnalyzer.analyze(basicStructureInput);
+    let basicStructureResult;
+    try {
+      const basicStructureInput: BasicStructureInput = {
+        resumeText,
+        extractionMode,
+        filename: input.filename,
+        pageCount: input.pageCount,
+        fileSize: input.fileSize,
+        hasImages: input.hasImages,
+        hasTables: input.hasTables,
+        hasMultipleColumns: input.hasMultipleColumns,
+        hasColors: input.hasColors,
+        hasGraphics: input.hasGraphics,
+      };
+      basicStructureResult = BasicStructureAnalyzer.analyze(basicStructureInput);
+    } catch (error) {
+      console.error('[EnhancedScoringService] Basic structure analysis failed:', error);
+      basicStructureResult = this.createFallbackTierResult('Basic Structure', 1, 20);
+    }
 
     // =========================================================================
     // TIER 2: Content Structure Analysis (25 metrics)
     // =========================================================================
-    const contentStructureResult = ContentStructureAnalyzer.analyze({
-      resumeText,
-      resumeData,
-    });
+    let contentStructureResult;
+    try {
+      contentStructureResult = ContentStructureAnalyzer.analyze({
+        resumeText,
+        resumeData,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Content structure analysis failed:', error);
+      contentStructureResult = this.createFallbackTierResult('Content Structure', 2, 25);
+    }
 
     // =========================================================================
     // Detect Job Role Type FIRST (before experience analysis)
@@ -232,90 +244,149 @@ export class EnhancedScoringService {
     // TIER 3: Experience Analysis (35 metrics) - CONDITIONAL
     // =========================================================================
     let experienceResult;
-    if (isFresherRole) {
-      // For fresher roles, create a neutral experience result without penalties
-      experienceResult = this.createFresherExperienceResult();
-    } else {
-      // For experienced roles, run full experience analysis
-      experienceResult = ExperienceAnalyzer.analyze({
-        resumeText,
-        resumeData,
-        jobDescription,
-        targetRole: resumeData?.targetRole,
-      });
+    try {
+      if (isFresherRole) {
+        // For fresher roles, create a neutral experience result without penalties
+        experienceResult = this.createFresherExperienceResult();
+      } else {
+        // For experienced roles, run full experience analysis
+        experienceResult = ExperienceAnalyzer.analyze({
+          resumeText,
+          resumeData,
+          jobDescription,
+          targetRole: resumeData?.targetRole,
+        });
+      }
+    } catch (error) {
+      console.error('[EnhancedScoringService] Experience analysis failed:', error);
+      experienceResult = this.createFallbackTierResult('Experience', 3, 35);
     }
 
     // =========================================================================
     // TIER 5: Skills & Keywords Analysis (40 metrics)
     // =========================================================================
-    const skillsKeywordsResult = SkillsKeywordsAnalyzer.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let skillsKeywordsResult;
+    try {
+      skillsKeywordsResult = SkillsKeywordsAnalyzer.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Skills analysis failed:', error);
+      skillsKeywordsResult = this.createFallbackTierResult('Skills & Keywords', 5, 40);
+    }
 
     // =========================================================================
     // TIER 4a: Education Analysis (12 metrics)
     // =========================================================================
-    const educationResult = EducationAnalyzer.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let educationResult;
+    try {
+      educationResult = EducationAnalyzer.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Education analysis failed:', error);
+      educationResult = this.createFallbackTierResult('Education', 4, 12);
+    }
 
     // =========================================================================
     // TIER 4b: Certifications Analysis (8 metrics)
     // =========================================================================
-    const certificationsResult = CertificationsAnalyzer.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let certificationsResult;
+    try {
+      certificationsResult = CertificationsAnalyzer.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Certifications analysis failed:', error);
+      certificationsResult = this.createFallbackTierResult('Certifications', 4, 8);
+    }
 
     // =========================================================================
     // TIER 6: Projects Analysis (15 metrics)
     // =========================================================================
-    const projectsResult = ProjectsAnalyzer.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let projectsResult;
+    try {
+      projectsResult = ProjectsAnalyzer.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Projects analysis failed:', error);
+      projectsResult = this.createFallbackTierResult('Projects', 6, 15);
+    }
 
     // =========================================================================
     // TIER 7: Red Flag Detection (30 metrics)
     // =========================================================================
-    const redFlagResult = RedFlagDetector.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let redFlagResult;
+    try {
+      redFlagResult = RedFlagDetector.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Red flag analysis failed:', error);
+      const fallbackResult = this.createFallbackTierResult('Red Flags', 7, 30);
+      redFlagResult = {
+        tierScore: fallbackResult.tierScore,
+        redFlags: [],
+        totalPenalty: 0,
+        autoRejectRisk: false,
+      };
+    }
 
     // =========================================================================
     // TIER 8: Competitive Analysis (15 metrics)
     // =========================================================================
-    const competitiveResult = CompetitiveAnalyzer.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let competitiveResult;
+    try {
+      competitiveResult = CompetitiveAnalyzer.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Competitive analysis failed:', error);
+      competitiveResult = this.createFallbackTierResult('Competitive', 8, 15);
+    }
 
     // =========================================================================
     // TIER 9: Culture Fit Analysis (20 metrics)
     // =========================================================================
-    const cultureFitResult = CultureFitAnalyzer.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let cultureFitResult;
+    try {
+      cultureFitResult = CultureFitAnalyzer.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Culture fit analysis failed:', error);
+      cultureFitResult = this.createFallbackTierResult('Culture Fit', 9, 20);
+    }
 
     // =========================================================================
     // TIER 10: Qualitative Analysis (10 metrics)
     // =========================================================================
-    const qualitativeResult = QualitativeAnalyzer.analyze({
-      resumeText,
-      resumeData,
-      jobDescription,
-    });
+    let qualitativeResult;
+    try {
+      qualitativeResult = QualitativeAnalyzer.analyze({
+        resumeText,
+        resumeData,
+        jobDescription,
+      });
+    } catch (error) {
+      console.error('[EnhancedScoringService] Qualitative analysis failed:', error);
+      qualitativeResult = this.createFallbackTierResult('Qualitative', 10, 10);
+    }
 
     // =========================================================================
     // Build Tier Scores (separate Education & Certifications)
@@ -404,7 +475,7 @@ export class EnhancedScoringService {
       missing_keywords: skillsKeywordsResult.missingKeywords.map(k => k.keyword),
       actions: this.generateActions(tierScores, redFlagResult.redFlags, skillsKeywordsResult.missingKeywords),
       example_rewrites: this.generateExampleRewrites(resumeData),
-      notes: this.generateNotes(tierScores, redFlagResult),
+      notes: this.generateNotes(tierScores, { autoRejectRisk: redFlagResult.autoRejectRisk }),
       analysis: this.generateAnalysis(scoreResult, tierScores, criticalMetrics),
       keyStrengths: this.identifyStrengths(tierScores),
       improvementAreas: this.identifyImprovements(tierScores),
@@ -773,13 +844,16 @@ export class EnhancedScoringService {
       return 'Experience section not required for fresher roles';
     }
     
-    if (tier.top_issues.length > 0) {
+    if (tier && tier.top_issues && tier.top_issues.length > 0) {
       return tier.top_issues[0];
     }
     
-    if (tier.percentage >= 80) return 'Excellent';
-    if (tier.percentage >= 70) return 'Good';
-    if (tier.percentage >= 60) return 'Fair';
+    if (tier && typeof tier.percentage === 'number') {
+      if (tier.percentage >= 80) return 'Excellent';
+      if (tier.percentage >= 70) return 'Good';
+      if (tier.percentage >= 60) return 'Fair';
+    }
+    
     return 'Needs improvement';
   }
 
@@ -815,6 +889,15 @@ export class EnhancedScoringService {
    * FIXED: Adjust tier weights based on role type - proper weight redistribution
    */
   private static adjustTierWeightsForRole(tierScores: TierScores, isFresherRole: boolean): TierScores {
+    // Helper function to safely calculate weighted contribution
+    const safeWeightedContribution = (tier: any, weight: number): number => {
+      if (!tier || typeof tier.percentage !== 'number') {
+        console.warn('[EnhancedScoringService] Invalid tier for weight calculation:', tier);
+        return 0;
+      }
+      return tier.percentage * weight / 100;
+    };
+
     if (isFresherRole) {
       // FIXED: Redistribute 25% experience weight to other tiers (total must = 100%)
       // Original experience weight (25%) redistributed as:
@@ -822,31 +905,31 @@ export class EnhancedScoringService {
       return {
         ...tierScores,
         experience: { ...tierScores.experience, weight: 0, weighted_contribution: 0 }, // FIXED: 0 weight
-        skills_keywords: { ...tierScores.skills_keywords, weight: 35, weighted_contribution: tierScores.skills_keywords.percentage * 35 / 100 }, // +10%
-        education: { ...tierScores.education, weight: 11, weighted_contribution: tierScores.education.percentage * 11 / 100 }, // +5%
-        projects: { ...tierScores.projects, weight: 13, weighted_contribution: tierScores.projects.percentage * 13 / 100 }, // +5%
-        certifications: { ...tierScores.certifications, weight: 6, weighted_contribution: tierScores.certifications.percentage * 6 / 100 }, // +2%
-        basic_structure: { ...tierScores.basic_structure, weight: 10, weighted_contribution: tierScores.basic_structure.percentage * 10 / 100 }, // +2%
-        content_structure: { ...tierScores.content_structure, weight: 12, weighted_contribution: tierScores.content_structure.percentage * 12 / 100 }, // +2%
-        competitive: { ...tierScores.competitive, weight: 7, weighted_contribution: tierScores.competitive.percentage * 7 / 100 }, // +1%
-        culture_fit: { ...tierScores.culture_fit, weight: 3, weighted_contribution: tierScores.culture_fit.percentage * 3 / 100 }, // -1%
-        qualitative: { ...tierScores.qualitative, weight: 3, weighted_contribution: tierScores.qualitative.percentage * 3 / 100 }, // -1%
+        skills_keywords: { ...tierScores.skills_keywords, weight: 35, weighted_contribution: safeWeightedContribution(tierScores.skills_keywords, 35) }, // +10%
+        education: { ...tierScores.education, weight: 11, weighted_contribution: safeWeightedContribution(tierScores.education, 11) }, // +5%
+        projects: { ...tierScores.projects, weight: 13, weighted_contribution: safeWeightedContribution(tierScores.projects, 13) }, // +5%
+        certifications: { ...tierScores.certifications, weight: 6, weighted_contribution: safeWeightedContribution(tierScores.certifications, 6) }, // +2%
+        basic_structure: { ...tierScores.basic_structure, weight: 10, weighted_contribution: safeWeightedContribution(tierScores.basic_structure, 10) }, // +2%
+        content_structure: { ...tierScores.content_structure, weight: 12, weighted_contribution: safeWeightedContribution(tierScores.content_structure, 12) }, // +2%
+        competitive: { ...tierScores.competitive, weight: 7, weighted_contribution: safeWeightedContribution(tierScores.competitive, 7) }, // +1%
+        culture_fit: { ...tierScores.culture_fit, weight: 3, weighted_contribution: safeWeightedContribution(tierScores.culture_fit, 3) }, // -1%
+        qualitative: { ...tierScores.qualitative, weight: 3, weighted_contribution: safeWeightedContribution(tierScores.qualitative, 3) }, // -1%
         // Total: 0+35+11+13+6+10+12+7+3+3 = 100% ✓
       };
     } else {
       // Keep standard weights for experienced roles
       return {
         ...tierScores,
-        experience: { ...tierScores.experience, weight: 25, weighted_contribution: tierScores.experience.percentage * 25 / 100 },
-        skills_keywords: { ...tierScores.skills_keywords, weight: 25, weighted_contribution: tierScores.skills_keywords.percentage * 25 / 100 },
-        education: { ...tierScores.education, weight: 6, weighted_contribution: tierScores.education.percentage * 6 / 100 },
-        certifications: { ...tierScores.certifications, weight: 4, weighted_contribution: tierScores.certifications.percentage * 4 / 100 },
-        projects: { ...tierScores.projects, weight: 8, weighted_contribution: tierScores.projects.percentage * 8 / 100 },
-        basic_structure: { ...tierScores.basic_structure, weight: 8, weighted_contribution: tierScores.basic_structure.percentage * 8 / 100 },
-        content_structure: { ...tierScores.content_structure, weight: 10, weighted_contribution: tierScores.content_structure.percentage * 10 / 100 },
-        competitive: { ...tierScores.competitive, weight: 6, weighted_contribution: tierScores.competitive.percentage * 6 / 100 },
-        culture_fit: { ...tierScores.culture_fit, weight: 4, weighted_contribution: tierScores.culture_fit.percentage * 4 / 100 },
-        qualitative: { ...tierScores.qualitative, weight: 4, weighted_contribution: tierScores.qualitative.percentage * 4 / 100 },
+        experience: { ...tierScores.experience, weight: 25, weighted_contribution: safeWeightedContribution(tierScores.experience, 25) },
+        skills_keywords: { ...tierScores.skills_keywords, weight: 25, weighted_contribution: safeWeightedContribution(tierScores.skills_keywords, 25) },
+        education: { ...tierScores.education, weight: 6, weighted_contribution: safeWeightedContribution(tierScores.education, 6) },
+        certifications: { ...tierScores.certifications, weight: 4, weighted_contribution: safeWeightedContribution(tierScores.certifications, 4) },
+        projects: { ...tierScores.projects, weight: 8, weighted_contribution: safeWeightedContribution(tierScores.projects, 8) },
+        basic_structure: { ...tierScores.basic_structure, weight: 8, weighted_contribution: safeWeightedContribution(tierScores.basic_structure, 8) },
+        content_structure: { ...tierScores.content_structure, weight: 10, weighted_contribution: safeWeightedContribution(tierScores.content_structure, 10) },
+        competitive: { ...tierScores.competitive, weight: 6, weighted_contribution: safeWeightedContribution(tierScores.competitive, 6) },
+        culture_fit: { ...tierScores.culture_fit, weight: 4, weighted_contribution: safeWeightedContribution(tierScores.culture_fit, 4) },
+        qualitative: { ...tierScores.qualitative, weight: 4, weighted_contribution: safeWeightedContribution(tierScores.qualitative, 4) },
       };
     }
   }
@@ -1129,7 +1212,7 @@ export class EnhancedScoringService {
 
     // Add actions based on tier issues
     Object.values(tierScores).forEach(tier => {
-      if (tier.percentage < 70 && tier.top_issues.length > 0) {
+      if (tier && typeof tier.percentage === 'number' && tier.percentage < 70 && tier.top_issues && tier.top_issues.length > 0) {
         actions.push(tier.top_issues[0]);
       }
     });
@@ -1140,8 +1223,8 @@ export class EnhancedScoringService {
     });
 
     // Add actions for missing keywords
-    const criticalMissing = missingKeywords.filter(k => k.tier === 'critical').slice(0, 2);
-    criticalMissing.forEach(k => {
+    const criticalMissing = missingKeywords.filter((k: any) => k.tier === 'critical').slice(0, 2);
+    criticalMissing.forEach((k: any) => {
       actions.push(`Add "${k.keyword}" to ${k.suggestedPlacement}`);
     });
 
@@ -1172,7 +1255,7 @@ export class EnhancedScoringService {
       notes.push('⚠️ Auto-reject risk: Multiple critical red flags detected');
     }
 
-    const lowTiers = Object.values(tierScores).filter(t => t.percentage < 50);
+    const lowTiers = Object.values(tierScores).filter(t => t && typeof t.percentage === 'number' && t.percentage < 50);
     if (lowTiers.length > 0) {
       notes.push(`${lowTiers.length} tier(s) need significant improvement`);
     }
@@ -1185,8 +1268,8 @@ export class EnhancedScoringService {
     tierScores: TierScores,
     criticalMetrics: CriticalMetrics
   ): string {
-    const strongTiers = Object.values(tierScores).filter(t => t.percentage >= 80);
-    const weakTiers = Object.values(tierScores).filter(t => t.percentage < 60);
+    const strongTiers = Object.values(tierScores).filter(t => t && typeof t.percentage === 'number' && t.percentage >= 80);
+    const weakTiers = Object.values(tierScores).filter(t => t && typeof t.percentage === 'number' && t.percentage < 60);
 
     let analysis = `Overall score: ${scoreResult.finalScore}/100 (${scoreResult.matchBand}). `;
     
@@ -1205,15 +1288,15 @@ export class EnhancedScoringService {
 
   private static identifyStrengths(tierScores: TierScores): string[] {
     return Object.values(tierScores)
-      .filter(t => t.percentage >= 75)
+      .filter(t => t && typeof t.percentage === 'number' && t.percentage >= 75)
       .map(t => `${t.tier_name}: ${t.percentage}%`)
       .slice(0, 5);
   }
 
   private static identifyImprovements(tierScores: TierScores): string[] {
     return Object.values(tierScores)
-      .filter(t => t.percentage < 70)
-      .sort((a, b) => a.percentage - b.percentage)
+      .filter(t => t && typeof t.percentage === 'number' && t.percentage < 70)
+      .sort((a, b) => (a.percentage || 0) - (b.percentage || 0))
       .map(t => `${t.tier_name}: ${t.percentage}%`)
       .slice(0, 5);
   }
@@ -1223,9 +1306,9 @@ export class EnhancedScoringService {
 
     // Recommendations based on weak tiers
     Object.values(tierScores)
-      .filter(t => t.percentage < 70)
+      .filter(t => t && typeof t.percentage === 'number' && t.percentage < 70)
       .forEach(tier => {
-        if (tier.top_issues.length > 0) {
+        if (tier.top_issues && tier.top_issues.length > 0) {
           recommendations.push(`[${tier.tier_name}] ${tier.top_issues[0]}`);
         }
       });
@@ -1432,6 +1515,34 @@ export class EnhancedScoringService {
     });
     
     return sections.join('\n');
+  }
+
+  /**
+   * Create a fallback tier result when an analyzer fails
+   */
+  private static createFallbackTierResult(tierName: string, tierNumber: number, maxScore: number): any {
+    const tierScore: TierScore = {
+      tier_number: tierNumber,
+      tier_name: tierName,
+      score: maxScore * 0.5, // Give 50% score as fallback
+      max_score: maxScore,
+      percentage: 50, // 50% as fallback
+      weight: 0, // Will be set later
+      weighted_contribution: 0, // Will be calculated later
+      metrics_passed: Math.floor(maxScore * 0.5),
+      metrics_total: maxScore,
+      top_issues: [`${tierName} analysis failed - using fallback scoring`],
+    };
+
+    // Return object with all possible properties that analyzers might have
+    return {
+      tierScore,
+      keywordMatchRate: 0,
+      missingKeywords: [],
+      orderIssues: [],
+      formatIssues: [],
+      // Add other common analyzer result properties as needed
+    };
   }
 }
 
