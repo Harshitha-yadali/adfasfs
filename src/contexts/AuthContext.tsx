@@ -156,8 +156,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   name: fullProfile?.full_name || prev.user?.name || 'User',
                   email: fullProfile?.email_address || prev.user?.email!,
                   phone: fullProfile?.phone || undefined,
-                  linkedin: fullProfile?.linkedin_profile || undefined,
-                  github: fullProfile?.wellfound_profile || undefined,
+                  linkedin: fullProfile?.linkedin_profile_url || undefined, // FIXED: Correct column name
+                  github: fullProfile?.github_profile_url || undefined, // FIXED: Correct column name
                   username: fullProfile?.username || undefined,
                   referralCode: fullProfile?.referral_code || undefined,
                   // Ensure hasSeenProfilePrompt defaults to false if null/undefined
@@ -170,6 +170,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   educationDetails: fullProfile?.education_details || undefined,
                   experienceDetails: fullProfile?.experience_details || undefined,
                   skillsDetails: fullProfile?.skills_details || undefined,
+                  projectsDetails: fullProfile?.projects_details || undefined, // ADDED: Projects details
+                  certificationsDetails: fullProfile?.certifications_details || undefined, // ADDED: Certifications details
                 } : null,
                 isAuthenticated: true,
                 isLoading: false,

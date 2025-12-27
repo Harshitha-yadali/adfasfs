@@ -164,8 +164,8 @@ const profileRole = data.user.user_metadata?.role || (isAdmin ? 'admin' : 'clien
     full_name: string,
     email_address: string,
     phone?: string,
-    linkedin_profile?: string,
-    wellfound_profile?: string,
+    linkedin_profile_url?: string,
+    github_profile_url?: string,
     username?: string,
     referral_code?: string,
     has_seen_profile_prompt?: boolean,
@@ -184,7 +184,7 @@ const profileRole = data.user.user_metadata?.role || (isAdmin ? 'admin' : 'clien
       const { data, error }
         = await supabase
         .from('user_profiles')
-        .select('full_name, email_address, phone, linkedin_profile, wellfound_profile, username, referral_code, has_seen_profile_prompt, resumes_created_count, role, resume_headline, current_location, education_details, experience_details, skills_details, certifications_details, projects_details')
+        .select('full_name, email_address, phone, linkedin_profile_url, github_profile_url, username, referral_code, has_seen_profile_prompt, resumes_created_count, role, resume_headline, current_location, education_details, experience_details, skills_details, certifications_details, projects_details')
         .eq('id', userId)
         .maybeSingle();
       if (error) {
@@ -267,8 +267,8 @@ const profileRole = profile?.role || (isAdmin ? 'admin' : 'client');
         name: profile?.full_name || session.user.email?.split('@')[0] || 'User',
         email: profile?.email_address || session.user.email!,
         phone: profile?.phone || undefined,
-        linkedin: profile?.linkedin_profile || undefined,
-        github: profile?.wellfound_profile || undefined,
+        linkedin: profile?.linkedin_profile_url || undefined,
+        github: profile?.github_profile_url || undefined,
         referralCode: profile?.referral_code || undefined,
         username: profile?.username || undefined,
         isVerified: session.user.email_confirmed_at !== null,
@@ -457,8 +457,8 @@ const profileRole = profile?.role || (isAdmin ? 'admin' : 'client');
       name: profile.full_name || session.user.email?.split('@')[0] || 'User',
       email: profile.email_address || session.user.email!,
       phone: profile.phone || undefined,
-      linkedin: profile.linkedin_profile || undefined,
-      github: profile.wellfound_profile || undefined,
+      linkedin: profile.linkedin_profile_url || undefined,
+      github: profile.github_profile_url || undefined,
       referralCode: profile.referral_code || undefined,
       username: profile.username || undefined,
       isVerified: session.user.email_confirmed_at !== null,
@@ -501,8 +501,8 @@ const profileRole = profile?.role || (isAdmin ? 'admin' : 'client');
   full_name: updates.full_name,
   email_address: updates.email_address,
   phone: updates.phone,
-  linkedin_profile: updates.linkedin_profile,
-  wellfound_profile: updates.github_profile,
+  linkedin_profile_url: updates.linkedin_profile, // FIXED: Correct column name
+  github_profile_url: updates.github_profile, // FIXED: Correct column name (was wellfound_profile)
   has_seen_profile_prompt: updates.has_seen_profile_prompt,
   resume_headline: updates.resume_headline,
   current_location: updates.current_location,

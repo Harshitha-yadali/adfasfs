@@ -22,6 +22,8 @@ export interface User {
   educationDetails?: Education[];
   experienceDetails?: WorkExperience[];
   skillsDetails?: Skill[];
+  projectsDetails?: Project[];
+  certificationsDetails?: Certification[];
 }
 
 export interface AuthState {
@@ -40,7 +42,6 @@ export interface SignupCredentials {
   email: string;
   password: string;
   confirmPassword: string;
-  referralCode?: string;
   referralCode?: string;
 }
 
