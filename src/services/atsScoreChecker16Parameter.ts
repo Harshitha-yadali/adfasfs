@@ -579,20 +579,16 @@ export class ATSScoreChecker16Parameter {
     // Start with enhanced score
     let score = Math.round((enhancedScore.tier_scores.experience.percentage / 100) * maxScore);
     
-    // Apply intelligent adjustments
-    if (enhancedScore.critical_metrics.experience_relevance.score > 0) {
-      // If critical experience metric shows relevance, ensure minimum score
-      score = Math.max(score, 3);
+    // FIXED: Removed artificial score floors that were inflating mismatched resume scores
+    // Only apply minimal boost if there's actual relevant experience
+    if (enhancedScore.critical_metrics.experience_relevance.score > 1) {
+      // Only boost if experience relevance is significant (score > 1)
+      score = Math.max(score, 2);
     }
     
-    // If JD-based and has job description, boost score based on keyword matches
-    if (jobDescription && enhancedScore.critical_metrics.jd_keywords_match.percentage > 30) {
-      score = Math.max(score, Math.round(maxScore * 0.4)); // At least 40% if good keyword match
-    }
-    
-    // Ensure experience tier contributes meaningfully
-    if (enhancedScore.tier_scores.experience.score > 0) {
-      score = Math.max(score, 2); // Minimum 2 points if any experience detected
+    // FIXED: Reduced JD-based boost - only apply if keyword match is strong (>50%)
+    if (jobDescription && enhancedScore.critical_metrics.jd_keywords_match.percentage > 50) {
+      score = Math.max(score, Math.round(maxScore * 0.3)); // Reduced from 40% to 30%
     }
     
     return Math.min(score, maxScore);
@@ -652,21 +648,15 @@ export class ATSScoreChecker16Parameter {
     // Start with enhanced score
     let score = Math.round((enhancedScore.critical_metrics.quantified_results_presence.percentage / 100) * maxScore);
     
-    // Apply intelligent detection
-    if (enhancedScore.critical_metrics.quantified_results_presence.score > 0) {
-      // If any quantified results detected, ensure minimum score
+    // FIXED: Removed artificial score floors
+    // Only boost if there's actual quantified content (score > 1)
+    if (enhancedScore.critical_metrics.quantified_results_presence.score > 1) {
       score = Math.max(score, 2);
     }
     
-    // Check experience tier for quantified content
-    if (enhancedScore.tier_scores.experience.percentage > 40) {
-      // If experience tier is decent, likely has some quantified content
-      score = Math.max(score, Math.round(maxScore * 0.25)); // At least 25%
-    }
-    
-    // Check if competitive tier indicates strong achievements
-    if (enhancedScore.tier_scores.competitive.percentage > 60) {
-      score = Math.max(score, Math.round(maxScore * 0.4)); // 40% if competitive
+    // FIXED: Reduced thresholds for competitive tier boost
+    if (enhancedScore.tier_scores.competitive.percentage > 70) {
+      score = Math.max(score, Math.round(maxScore * 0.3)); // Reduced from 40% to 30%
     }
     
     return Math.min(score, maxScore);
@@ -689,16 +679,14 @@ export class ATSScoreChecker16Parameter {
       const jdMatchScore = Math.round((enhancedScore.critical_metrics.jd_keywords_match.percentage / 100) * maxScore);
       score = Math.max(score, jdMatchScore);
       
-      // Ensure minimum if any JD keywords matched
-      if (enhancedScore.critical_metrics.jd_keywords_match.percentage > 0) {
-        score = Math.max(score, 5); // Minimum 5 points for any JD match
+      // FIXED: Only apply minimum if JD keyword match is significant (>20%)
+      if (enhancedScore.critical_metrics.jd_keywords_match.percentage > 20) {
+        score = Math.max(score, 3); // Reduced from 5 to 3
       }
     }
     
-    // Ensure minimum based on skills tier
-    if (enhancedScore.tier_scores.skills_keywords.score > 0) {
-      score = Math.max(score, 3); // Minimum 3 points if any skills detected
-    }
+    // FIXED: Removed artificial minimum for any skills detected
+    // Let the actual percentage drive the score
     
     return Math.min(score, maxScore);
   }
@@ -719,15 +707,13 @@ export class ATSScoreChecker16Parameter {
     const techScore = Math.round((enhancedScore.critical_metrics.technical_skills_alignment.percentage / 100) * maxScore);
     score = Math.max(score, techScore);
     
-    // If JD-based, ensure reasonable alignment
-    if (jobDescription && enhancedScore.critical_metrics.technical_skills_alignment.percentage > 30) {
-      score = Math.max(score, Math.round(maxScore * 0.4)); // At least 40% if decent tech alignment
+    // FIXED: Only apply JD-based boost if alignment is strong (>50%)
+    if (jobDescription && enhancedScore.critical_metrics.technical_skills_alignment.percentage > 50) {
+      score = Math.max(score, Math.round(maxScore * 0.3)); // Reduced from 40% to 30%
     }
     
-    // Ensure minimum if any technical skills detected
-    if (enhancedScore.critical_metrics.technical_skills_alignment.score > 0) {
-      score = Math.max(score, 4); // Minimum 4 points for any tech skills
-    }
+    // FIXED: Removed artificial minimum for any tech skills detected
+    // Let the actual percentage drive the score
     
     return Math.min(score, maxScore);
   }

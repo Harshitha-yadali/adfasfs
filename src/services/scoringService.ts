@@ -1395,7 +1395,29 @@ export const reconstructResumeText = (resumeData: any): string => {
 };
 
 export const generateBeforeScore = (resumeText: string): MatchScore => {
-  const baseScore = Math.floor(Math.random() * 16) + 50;
+  // FIXED: Calculate actual score based on resume content instead of random
+  // This ensures poor resumes get low scores
+  const wordCount = resumeText.trim().split(/\s+/).length;
+  const hasSkills = /skills|technical|programming|software/i.test(resumeText);
+  const hasExperience = /experience|work|employment|job/i.test(resumeText);
+  const hasEducation = /education|degree|university|college/i.test(resumeText);
+  const hasBullets = (resumeText.match(/[•\-\*]\s/g) || []).length;
+  
+  // Calculate base score from content quality
+  let baseScore = 20; // Start low
+  
+  if (wordCount >= 300) baseScore += 15;
+  else if (wordCount >= 150) baseScore += 10;
+  else if (wordCount >= 50) baseScore += 5;
+  
+  if (hasSkills) baseScore += 10;
+  if (hasExperience) baseScore += 10;
+  if (hasEducation) baseScore += 5;
+  if (hasBullets >= 5) baseScore += 10;
+  else if (hasBullets >= 2) baseScore += 5;
+  
+  // Cap at 65 for "before" optimization score
+  baseScore = Math.min(65, Math.max(15, baseScore));
 
   return {
     score: baseScore,
