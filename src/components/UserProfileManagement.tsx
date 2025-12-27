@@ -378,12 +378,16 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
   const [showAlert, setShowAlert] = useState(false);
   const [alertContent, setAlertContent] = useState<{ title: string; message: string; type: 'info' | 'success' | 'warning' | 'error' }>({ title: '', message: '', type: 'info' });
   const [isParsingResume, setIsParsingResume] = useState(false);
+  const [parsingProgress, setParsingProgress] = useState<string>('');
+  const [parsingError, setParsingError] = useState<string | null>(null);
+  const [lastUploadedFile, setLastUploadedFile] = useState<ExtractionResult | null>(null);
 
   const {
     register,
     handleSubmit,
     reset,
     control,
+    watch,
     formState: { errors, isDirty },
     setValue, // Destructure setValue
     getValues, // Destructure getValues for logging
@@ -411,6 +415,61 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
   const { fields: projectFields, append: appendProject, remove: removeProject, update: updateProject } = useFieldArray({ control, name: 'projects_details' });
   const { fields: skillFields, append: appendSkill, remove: removeSkill, update: updateSkill } = useFieldArray({ control, name: 'skills_details' });
   const { fields: certificationFields, append: appendCertification, remove: removeCertification, update: updateCertification } = useFieldArray({ control, name: 'certifications_details' });
+
+  // Calculate profile completion percentage
+  const calculateProfileCompletion = useCallback(() => {
+    const values = getValues();
+    let completed = 0;
+    let total = 0;
+
+    // Required fields (weight: 2)
+    const requiredFields = ['full_name', 'email_address'];
+    requiredFields.forEach(field => {
+      total += 2;
+      if (values[field as keyof ProfileFormData]) completed += 2;
+    });
+
+    // Important fields (weight: 1.5)
+    const importantFields = ['phone', 'current_location', 'resume_headline'];
+    importantFields.forEach(field => {
+      total += 1.5;
+      if (values[field as keyof ProfileFormData]) completed += 1.5;
+    });
+
+    // Optional fields (weight: 1)
+    const optionalFields = ['linkedin_profile', 'github_profile'];
+    optionalFields.forEach(field => {
+      total += 1;
+      if (values[field as keyof ProfileFormData]) completed += 1;
+    });
+
+    // Array sections (weight: 2 each)
+    const arraySections = ['education_details', 'experience_details', 'skills_details', 'projects_details', 'certifications_details'];
+    arraySections.forEach(field => {
+      total += 2;
+      const arr = values[field as keyof ProfileFormData] as any[];
+      if (arr && arr.length > 0) completed += 2;
+    });
+
+    return Math.round((completed / total) * 100);
+  }, [getValues]);
+
+  const [profileCompletion, setProfileCompletion] = useState(0);
+
+  // Watch all form values for completion calculation
+  const watchedValues = watch();
+
+  // Update completion when form values change
+  useEffect(() => {
+    setProfileCompletion(calculateProfileCompletion());
+  }, [watchedValues, calculateProfileCompletion]);
+
+  // Initial calculation
+  useEffect(() => {
+    if (user && isOpen) {
+      setTimeout(() => setProfileCompletion(calculateProfileCompletion()), 100);
+    }
+  }, [user, isOpen, calculateProfileCompletion]);
 
   useEffect(() => {
     if (viewMode) {
@@ -583,12 +642,26 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
       return;
     }
 
+    // Store for retry capability
+    setLastUploadedFile(result);
+    setParsingError(null);
+
     // Show loader while we parse and fill the form
     setIsParsingResume(true);
+    setParsingProgress('Extracting resume content...');
+    
     try {
       console.log('Extracted text for parsing:', result.text);
+      setParsingProgress('Analyzing resume structure...');
+      
+      // Add a small delay to show progress
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setParsingProgress('Parsing with AI (this may take 10-30 seconds)...');
+      
       const resumeData: ResumeData = await mockPaymentService.parseResumeWithAI(result.text);
       console.log('Parsed Resume Data from mockPaymentService:', resumeData); // Diagnostic Log 1
+      
+      setParsingProgress('Populating form fields...');
 
       // Helper: normalize arrays to strings and dedupe
       const toStringArray = (arr?: any[]): string[] => {
@@ -674,13 +747,23 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
 
       setAlertContent({ title: 'Resume Parsed!', message: 'Your resume data has been pre-filled into the form.', type: 'success' });
       setShowAlert(true);
+      setParsingError(null);
     } catch (error: any) {
       console.error('Error parsing resume with AI:', error);
+      setParsingError(error.message || 'Failed to parse resume with AI. Please try again or fill manually.');
       setAlertContent({ title: 'Parsing Failed', message: error.message || 'Failed to parse resume with AI. Please try again or fill manually.', type: 'error' });
       setShowAlert(true);
     } finally {
       // Hide loader once done
       setIsParsingResume(false);
+      setParsingProgress('');
+    }
+  };
+
+  // Retry parsing function
+  const handleRetryParsing = () => {
+    if (lastUploadedFile) {
+      handleResumeFileUpload(lastUploadedFile);
     }
   };
 
@@ -705,9 +788,25 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
             <h1 className="text-lg sm:text-3xl lg:text-4xl font-bold text-slate-100 mb-2 sm:mb-3">
               Manage Your Profile
             </h1>
-            <p className="text-sm sm:text-lg lg:text-xl text-slate-300 mb-3 sm:mb-6">
+            <p className="text-sm sm:text-lg lg:text-xl text-slate-300 mb-3 sm:mb-4">
               Keep your information up-to-date for seamless resume optimization and auto-apply.
             </p>
+            {/* Profile Completion Indicator */}
+            <div className="max-w-xs mx-auto">
+              <div className="flex items-center justify-between text-sm mb-1">
+                <span className="text-slate-400">Profile Completion</span>
+                <span className={'font-semibold ' + (profileCompletion >= 80 ? 'text-emerald-400' : profileCompletion >= 50 ? 'text-yellow-400' : 'text-red-400')}>{profileCompletion}%</span>
+              </div>
+              <div className="w-full bg-slate-700 rounded-full h-2">
+                <div 
+                  className={'h-2 rounded-full transition-all duration-500 ' + (profileCompletion >= 80 ? 'bg-emerald-500' : profileCompletion >= 50 ? 'bg-yellow-500' : 'bg-red-500')}
+                  style={{ width: profileCompletion + '%' }}
+                ></div>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {profileCompletion < 50 ? 'Add more details to improve your profile' : profileCompletion < 80 ? 'Good progress! Keep adding details' : 'Great! Your profile is well-filled'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -736,12 +835,16 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
         </div>
 
         {/* Content Area */}
-        <div className="p-3 sm:p-6 lg:p-8 overflow-y-auto flex-1 relative">
+        <div className="p-3 sm:p-6 lg:p-8 overflow-y-auto flex-1 relative scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
           {isParsingResume && (
             <div className="absolute inset-0 z-20 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center">
-              <div className="flex items-center space-x-3 px-4 py-3 rounded-xl border border-slate-700 shadow-lg bg-slate-800">
-                <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
-                <span className="text-slate-200 font-medium">Parsing your resume… Please wait</span>
+              <div className="flex flex-col items-center space-y-3 px-6 py-4 rounded-xl border border-slate-700 shadow-lg bg-slate-800 max-w-sm">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+                <span className="text-slate-200 font-medium text-center">{parsingProgress || 'Parsing your resume…'}</span>
+                <div className="w-full bg-slate-700 rounded-full h-1.5">
+                  <div className="bg-emerald-500 h-1.5 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                </div>
+                <p className="text-xs text-slate-400 text-center">This may take 10-30 seconds depending on resume complexity</p>
               </div>
             </div>
           )}
@@ -775,6 +878,25 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
                 <p className="text-sm text-slate-400 mt-4">
                   Upload your resume (PDF, DOCX, TXT) to automatically populate your profile details.
                 </p>
+                {parsingError && (
+                  <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start">
+                        <AlertCircle className="w-5 h-5 text-red-400 mr-2 mt-0.5 flex-shrink-0" />
+                        <p className="text-red-300 text-sm">{parsingError}</p>
+                      </div>
+                      {lastUploadedFile && (
+                        <button
+                          type="button"
+                          onClick={handleRetryParsing}
+                          className="ml-3 px-3 py-1 text-sm bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Retry
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Personal Information */}
@@ -785,18 +907,26 @@ export const UserProfileManagement: React.FC<UserProfileManagementProps> = ({
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
-                    <input type="text" {...register('full_name')} className="input-base" />
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Full Name <span className="text-red-400">*</span>
+                    </label>
+                    <input type="text" {...register('full_name')} className="input-base" placeholder="Enter your full name" />
                     {errors.full_name && <p className="text-red-400 text-xs mt-1">{errors.full_name.message}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
-                    <input type="email" {...register('email_address')} className="input-base" disabled />
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                      Email Address <span className="text-red-400">*</span>
+                    </label>
+                    <input type="email" {...register('email_address')} className="input-base bg-slate-700/50 cursor-not-allowed" disabled />
+                    <p className="text-xs text-slate-500 mt-1 flex items-center">
+                      <Info className="w-3 h-3 mr-1" />
+                      Email is linked to your account and cannot be changed here
+                    </p>
                     {errors.email_address && <p className="text-red-400 text-xs mt-1">{errors.email_address.message}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">Phone</label>
-                    <input type="tel" {...register('phone')} className="input-base" />
+                    <input type="tel" {...register('phone')} className="input-base" placeholder="+91 9876543210" />
                     {errors.phone && <p className="text-red-400 text-xs mt-1">{errors.phone.message}</p>}
                   </div>
                   <div>
