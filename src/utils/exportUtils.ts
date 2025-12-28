@@ -296,7 +296,7 @@ function drawText(
   state.currentY += totalHeight;
   return totalHeight;
 }
-// Robust certifications renderer - Simple bullet point format on one line
+// Robust certifications renderer - Line by line bullet format
 function renderCertificationsForPDF2(state: PageState, certifications: (string | Certification)[], PDF_CONFIG: any): number {
   const filtered = (certifications || []).filter((c) => {
     if (typeof c === 'string') return c.trim().length > 0 && !isPlaceholderText(c);
@@ -323,23 +323,23 @@ function renderCertificationsForPDF2(state: PageState, certifications: (string |
 
   if (!certNames.length) return totalHeight;
 
-  // Format as bullet points: • Cert1  • Cert2  • Cert3
-  const certLine = certNames.map(name => `• ${name}`).join('  ');
-  
-  if (!checkPageSpace(state, 15, PDF_CONFIG)) addNewPage(state, PDF_CONFIG);
+  // Display each certification on its own line with bullet
+  certNames.forEach((certName) => {
+    if (!checkPageSpace(state, 12, PDF_CONFIG)) addNewPage(state, PDF_CONFIG);
 
-  const certHeight = drawText(
-    state,
-    certLine,
-    PDF_CONFIG.margins.left,
-    PDF_CONFIG,
-    {
-      fontSize: PDF_CONFIG.fonts.body.size,
-      maxWidth: PDF_CONFIG.contentWidth
-    }
-  );
-  totalHeight += certHeight;
-  state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
+    const certHeight = drawText(
+      state,
+      `• ${certName}`,
+      PDF_CONFIG.margins.left + PDF_CONFIG.spacing.bulletIndent,
+      PDF_CONFIG,
+      {
+        fontSize: PDF_CONFIG.fonts.body.size,
+        maxWidth: PDF_CONFIG.contentWidth - PDF_CONFIG.spacing.bulletIndent
+      }
+    );
+    totalHeight += certHeight;
+    state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
+  });
 
   return totalHeight;
 }
@@ -744,36 +744,43 @@ function drawEducation(state: PageState, education: any[], PDF_CONFIG: any): num
 }
 
 
-// Draw projects section - Simple bullet point format (like certifications)
+// Draw projects section
 function drawProjects(state: PageState, projects: any[], PDF_CONFIG: any): number {
   if (!projects || projects.length === 0) return 0;
 
+  const githubProjects = projects.filter(project => project.githubUrl);
   let totalHeight = drawSectionTitle(state, 'Projects', PDF_CONFIG);
 
-  // Extract project titles dynamically
-  const projectTitles: string[] = projects
-    .map((project) => toPlainText(project.title) || '')
-    .filter(title => title.trim().length > 0 && !isPlaceholderText(title));
-
-  if (!projectTitles.length) return totalHeight;
-
-  // Format as bullet points: • Project1  • Project2  • Project3
-  const projectLine = projectTitles.map(title => `• ${title}`).join('  ');
-  
-  if (!checkPageSpace(state, 15, PDF_CONFIG)) addNewPage(state, PDF_CONFIG);
-
-  const projectHeight = drawText(
-    state,
-    projectLine,
-    PDF_CONFIG.margins.left,
-    PDF_CONFIG,
-    {
-      fontSize: PDF_CONFIG.fonts.body.size,
-      maxWidth: PDF_CONFIG.contentWidth
+  projects.forEach((project, index) => {
+    if (!checkPageSpace(state, 25, PDF_CONFIG)) {
+      addNewPage(state, PDF_CONFIG);
     }
-  );
-  totalHeight += projectHeight;
-  state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
+
+    const titleHeight = drawText(state, project.title, PDF_CONFIG.margins.left, PDF_CONFIG, {
+      fontSize: PDF_CONFIG.fonts.jobTitle.size,
+      fontWeight: PDF_CONFIG.fonts.jobTitle.weight // Already bold
+    });
+    totalHeight += titleHeight;
+    state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
+
+    if (project.bullets && project.bullets.length > 0) {
+      state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
+      project.bullets.forEach((bullet: string) => {
+        const bulletText = `• ${bullet}`;
+        const bulletHeight = drawText(state, bulletText, PDF_CONFIG.margins.left + PDF_CONFIG.spacing.bulletIndent, PDF_CONFIG, {
+          fontSize: PDF_CONFIG.fonts.body.size,
+          maxWidth: PDF_CONFIG.contentWidth - PDF_CONFIG.spacing.bulletIndent
+        });
+        totalHeight += bulletHeight;
+      });
+      state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
+    }
+
+    if (index < projects.length - 1) {
+      state.currentY += 1;
+      totalHeight += 1;
+    }
+  });
 
   return totalHeight;
 }
