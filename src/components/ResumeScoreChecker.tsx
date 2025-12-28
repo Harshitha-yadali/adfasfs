@@ -105,7 +105,6 @@ export const ResumeScoreChecker: React.FC<ResumeScoreCheckerProps> = ({
   const [jobDescription, setJobDescription] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [scoringMode, setScoringMode] = useState<ScoringMode | null>(null);
-  const [autoScoreOnUpload, setAutoScoreOnUpload] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [scoreResult, setScoreResult] = useState<ATSScore16Parameter | null>(null);
@@ -242,7 +241,7 @@ export const ResumeScoreChecker: React.FC<ResumeScoreCheckerProps> = ({
   // New public function called by the button click
   const analyzeResume = useCallback(async () => {
     if (scoringMode === null) {
-      onShowAlert('Choose a Scoring Method', 'Please select either "Score Against a Job" or "General Score" to continue.', 'warning');
+      onShowAlert('Choose a Scoring Method', 'Please select "Score Against a Job" to continue.', 'warning');
       return;
     }
 
@@ -397,10 +396,6 @@ if (hasScoreCheckCredits) {
       text.includes('<!-- jd_optimized -->') || // Hidden marker in exported resumes
       text.includes('origin: jd_optimized');
     setIsOptimizedResume(isOptimized);
-    
-    if (scoringMode === 'general' && autoScoreOnUpload && result.text.trim()) {
-      setTimeout(() => analyzeResume(), 500);
-    }
   };
   
   const handleParsedResume = (parsedResume: ParsedResume | null) => {
@@ -579,16 +574,16 @@ if (hasScoreCheckCredits) {
                 </motion.div>
 
                 {/* Scoring Method Cards */}
-                <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto mb-12">
-                  {/* JD-Based Scoring Card */}
+                <div className="max-w-2xl mx-auto mb-12">
+                  {/* JD-Based Scoring Card - Only Option */}
                   <motion.button
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.1 }}
                     whileHover={{ scale: 1.02, y: -4 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleSelectScoringMode('jd_based')}
-                    className={`relative p-6 rounded-2xl border text-left transition-all duration-300 overflow-hidden group ${
+                    className={`relative w-full p-6 rounded-2xl border text-left transition-all duration-300 overflow-hidden group ${
                       scoringMode === 'jd_based'
                         ? 'border-emerald-400/60 bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 shadow-[0_0_40px_rgba(16,185,129,0.25)]'
                         : 'border-slate-700/50 hover:border-emerald-400/40 bg-slate-900/60 hover:bg-slate-800/60'
@@ -642,79 +637,6 @@ if (hasScoreCheckCredits) {
                     {/* Selection Indicator */}
                     {scoringMode === 'jd_based' && (
                       <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-cyan-500" />
-                    )}
-                  </motion.button>
-
-                  {/* General Scoring Card */}
-                  <motion.button
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    whileHover={{ scale: 1.02, y: -4 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleSelectScoringMode('general')}
-                    className={`relative p-6 rounded-2xl border text-left transition-all duration-300 overflow-hidden group ${
-                      scoringMode === 'general'
-                        ? 'border-indigo-400/60 bg-gradient-to-br from-indigo-500/20 to-purple-500/10 shadow-[0_0_40px_rgba(99,102,241,0.25)]'
-                        : 'border-slate-700/50 hover:border-indigo-400/40 bg-slate-900/60 hover:bg-slate-800/60'
-                    }`}
-                  >
-                    {/* Icon with Glow */}
-                    <div className="relative mb-6 mt-6">
-                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300 ${
-                        scoringMode === 'general'
-                          ? 'bg-gradient-to-br from-indigo-500 to-purple-500 shadow-[0_0_30px_rgba(99,102,241,0.5)]'
-                          : 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20 group-hover:from-indigo-500/30 group-hover:to-purple-500/30'
-                      }`}>
-                        <BarChart3 className={`w-8 h-8 ${scoringMode === 'general' ? 'text-white' : 'text-indigo-400'}`} />
-                      </div>
-                    </div>
-
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">General Score</h3>
-                    <p className="text-slate-400 text-sm mb-6">
-                      Get a comprehensive assessment against industry standards and best practices
-                    </p>
-
-                    {/* Features List */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                          <CheckCircle className="w-4 h-4 text-indigo-400" />
-                        </div>
-                        <span className="text-slate-300 text-sm">ATS compatibility check</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                          <CheckCircle className="w-4 h-4 text-indigo-400" />
-                        </div>
-                        <span className="text-slate-300 text-sm">Format & structure analysis</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                          <CheckCircle className="w-4 h-4 text-indigo-400" />
-                        </div>
-                        <span className="text-slate-300 text-sm">Content quality scoring</span>
-                      </div>
-                    </div>
-
-                    {/* Auto-score option */}
-                    {scoringMode === 'general' && (
-                      <div className="mt-6 pt-4 border-t border-slate-700/50">
-                        <label className="flex items-center gap-3 cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={autoScoreOnUpload}
-                            onChange={(e) => setAutoScoreOnUpload(e.target.checked)}
-                            className="form-checkbox h-5 w-5 text-indigo-500 rounded focus:ring-indigo-500 bg-slate-800 border-slate-600"
-                          />
-                          <span className="text-sm text-slate-300">Auto-score on upload</span>
-                        </label>
-                      </div>
-                    )}
-
-                    {/* Selection Indicator */}
-                    {scoringMode === 'general' && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
                     )}
                   </motion.button>
                 </div>
