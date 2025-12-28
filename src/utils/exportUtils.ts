@@ -296,7 +296,7 @@ function drawText(
   state.currentY += totalHeight;
   return totalHeight;
 }
-// Robust certifications renderer to handle flexible shapes and safe bullets
+// Robust certifications renderer - Simple one-line comma-separated format
 function renderCertificationsForPDF2(state: PageState, certifications: (string | Certification)[], PDF_CONFIG: any): number {
   const filtered = (certifications || []).filter((c) => {
     if (typeof c === 'string') return c.trim().length > 0 && !isPlaceholderText(c);
@@ -312,73 +312,34 @@ function renderCertificationsForPDF2(state: PageState, certifications: (string |
 
   let totalHeight = drawSectionTitle(state, 'Certifications', PDF_CONFIG);
 
-  filtered.forEach((cert) => {
-    if (!checkPageSpace(state, 15, PDF_CONFIG)) addNewPage(state, PDF_CONFIG);
-
+  // Extract certification titles/names into a simple list
+  const certNames: string[] = filtered.map((cert) => {
     if (typeof cert === 'object' && cert !== null) {
       const anyC: any = cert;
-      const title = toPlainText(anyC.title) || toPlainText(anyC);
-      const desc = toPlainText(anyC?.description);
-      
-      // Draw title in bold if we have both title and description
-      if (title && desc && desc !== title) {
-        const titleHeight = drawText(
-          state,
-          `- ${title}`,
-          PDF_CONFIG.margins.left + PDF_CONFIG.spacing.bulletIndent,
-          PDF_CONFIG,
-          {
-            fontSize: PDF_CONFIG.fonts.body.size,
-            fontWeight: 'bold',
-            maxWidth: PDF_CONFIG.contentWidth - PDF_CONFIG.spacing.bulletIndent
-          }
-        );
-        totalHeight += titleHeight;
-        state.currentY += 2; // Small spacing between title and description
-        
-        // Draw description in smaller, indented text
-        const descHeight = drawText(
-          state,
-          desc,
-          PDF_CONFIG.margins.left + PDF_CONFIG.spacing.bulletIndent * 1.5,
-          PDF_CONFIG,
-          {
-            fontSize: PDF_CONFIG.fonts.body.size - 1, // Slightly smaller font
-            maxWidth: PDF_CONFIG.contentWidth - (PDF_CONFIG.spacing.bulletIndent * 1.5)
-          }
-        );
-        totalHeight += descHeight + 2;
-      } else {
-        // Single line format for title-only or description-only
-        const primary = title || desc;
-        const titleHeight = drawText(
-          state,
-          `- ${primary}`,
-          PDF_CONFIG.margins.left + PDF_CONFIG.spacing.bulletIndent,
-          PDF_CONFIG,
-          {
-            fontSize: PDF_CONFIG.fonts.body.size,
-            maxWidth: PDF_CONFIG.contentWidth - PDF_CONFIG.spacing.bulletIndent
-          }
-        );
-        totalHeight += titleHeight;
-      }
-    } else {
-      const bulletText = `- ${toPlainText(cert)}`;
-      const certHeight = drawText(
-        state,
-        bulletText,
-        PDF_CONFIG.margins.left + PDF_CONFIG.spacing.bulletIndent,
-        PDF_CONFIG,
-        {
-          fontSize: PDF_CONFIG.fonts.body.size,
-          maxWidth: PDF_CONFIG.contentWidth - PDF_CONFIG.spacing.bulletIndent
-        }
-      );
-      totalHeight += certHeight;
+      return toPlainText(anyC.title) || toPlainText(anyC) || toPlainText(anyC?.description) || '';
     }
-    state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
-  });
+    return toPlainText(cert);
+  }).filter(name => name.trim().length > 0);
+
+  if (!certNames.length) return totalHeight;
+
+  // Join all certifications with " | " separator for clean one-line display
+  const certLine = certNames.join('  |  ');
+  
+  if (!checkPageSpace(state, 15, PDF_CONFIG)) addNewPage(state, PDF_CONFIG);
+
+  const certHeight = drawText(
+    state,
+    certLine,
+    PDF_CONFIG.margins.left,
+    PDF_CONFIG,
+    {
+      fontSize: PDF_CONFIG.fonts.body.size,
+      maxWidth: PDF_CONFIG.contentWidth
+    }
+  );
+  totalHeight += certHeight;
+  state.currentY += PDF_CONFIG.spacing.bulletListSpacing;
 
   return totalHeight;
 }
