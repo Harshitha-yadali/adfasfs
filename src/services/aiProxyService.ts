@@ -77,7 +77,7 @@ export const edenai = {
     
     const formData = new FormData();
     formData.append('file', file, file.name);
-    formData.append('providers', 'mistral');
+    formData.append('providers', 'mistral'); // Cheapest OCR option ($1/1K pages)
     formData.append('language', 'en');
 
     const response = await fetch('https://api.edenai.run/v2/ocr/ocr_async', {
@@ -261,7 +261,7 @@ export const edenai = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        providers: options.provider || 'mistral/mistral-large-latest',
+        providers: options.provider || 'openai/gpt-4o-mini', // Changed from mistral-large to gpt-4o-mini - much cheaper
         text: prompt,
         chatbot_global_action: 'You are an expert assistant.',
         previous_history: [],
@@ -287,7 +287,7 @@ export const edenai = {
   async chatViaProxy(prompt: string, options: { provider?: string; temperature?: number; maxTokens?: number } = {}) {
     const result = await callProxy('edenai', 'chat', {
       prompt,
-      provider: options.provider || 'mistral/mistral-large-latest',
+      provider: options.provider || 'openai/gpt-4o-mini', // Changed from mistral-large to gpt-4o-mini - much cheaper
       temperature: options.temperature || 0.1,
       maxTokens: options.maxTokens || 4000,
     });

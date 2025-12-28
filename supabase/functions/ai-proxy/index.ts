@@ -55,7 +55,7 @@ async function handleEdenAI(action: string, params: any) {
       const blob = new Blob([bytes], { type: fileType });
       const formData = new FormData();
       formData.append('file', blob, fileName);
-      formData.append('providers', 'mistral');
+      formData.append('providers', 'mistral'); // Cheapest OCR option ($1/1K pages)
       formData.append('language', 'en');
 
       const res = await fetch('https://api.edenai.run/v2/ocr/ocr_async', {
