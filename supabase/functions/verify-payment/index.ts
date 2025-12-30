@@ -336,17 +336,35 @@ serve(async (req) => {
         console.log(`[${new Date().toISOString()}] - Found addOn config: ${JSON.stringify(addOn)}`);
 
         console.log(`[${new Date().toISOString()}] - Looking up addon_type for type_key: ${addOn.type}`);
-        const { data: addonType, error: addonTypeError } = await supabase
+        let { data: addonType, error: addonTypeError } = await supabase
           .from("addon_types")
           .select("id")
           .eq("type_key", addOn.type)
           .single();
 
+        // If addon_type doesn't exist, create it
         if (addonTypeError || !addonType) {
-          console.error(`[${new Date().toISOString()}] - Error finding addon_type for key ${addOn.type}:`, addonTypeError);
-          continue;
+          console.log(`[${new Date().toISOString()}] - addon_type not found for ${addOn.type}, creating it...`);
+          const { data: newAddonType, error: createError } = await supabase
+            .from("addon_types")
+            .insert({
+              name: addOn.name,
+              type_key: addOn.type,
+              unit_price: addOn.price * 100, // Convert to paise
+              description: `${addOn.name} credit`,
+            })
+            .select("id")
+            .single();
+
+          if (createError) {
+            console.error(`[${new Date().toISOString()}] - Error creating addon_type for ${addOn.type}:`, createError);
+            continue;
+          }
+          addonType = newAddonType;
+          console.log(`[${new Date().toISOString()}] - Created addon_type with ID: ${addonType.id} for key: ${addOn.type}`);
+        } else {
+          console.log(`[${new Date().toISOString()}] - Found addon_type with ID: ${addonType.id} for key: ${addOn.type}`);
         }
-        console.log(`[${new Date().toISOString()}] - Found addon_type with ID: ${addonType.id} for key: ${addOn.type}`);
 
         console.log(`[${new Date().toISOString()}] - Preparing to insert add-on credits with values: user_id: ${user.id}, addon_type_id: ${addonType.id}, quantity: ${quantity}, transactionId: ${transactionId}`);
         const { error: creditInsertError } = await supabase

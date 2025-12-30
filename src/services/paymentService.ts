@@ -939,8 +939,32 @@ class PaymentService {
             .eq('type_key', addOnCfg.type)
             .single();
 
+          let addonTypeId = addonType?.id;
+
+          // If addon_type doesn't exist, create it
           if (addonTypeError || !addonType) {
-            console.error(`[${new Date().toISOString()}] - Error finding addon_type for key ${addOnCfg.type}:`, addonTypeError?.message, addonTypeError?.details);
+            console.log(`[${new Date().toISOString()}] - addon_type not found for ${addOnCfg.type}, creating it...`);
+            const { data: newAddonType, error: createError } = await supabase
+              .from('addon_types')
+              .insert({
+                name: addOnCfg.name,
+                type_key: addOnCfg.type,
+                unit_price: addOnCfg.price * 100,
+                description: `${addOnCfg.name} credit`,
+              })
+              .select('id')
+              .single();
+
+            if (createError) {
+              console.error(`[${new Date().toISOString()}] - Error creating addon_type for ${addOnCfg.type}:`, createError?.message, createError?.details);
+              continue;
+            }
+            addonTypeId = newAddonType?.id;
+            console.log(`[${new Date().toISOString()}] - Created addon_type with ID: ${addonTypeId} for key: ${addOnCfg.type}`);
+          }
+
+          if (!addonTypeId) {
+            console.error(`[${new Date().toISOString()}] - No addon_type ID available for ${addOnCfg.type}. Skipping.`);
             continue;
           }
 
@@ -948,7 +972,7 @@ class PaymentService {
             .from('user_addon_credits')
             .insert({
               user_id: userId,
-              addon_type_id: addonType.id,
+              addon_type_id: addonTypeId,
               quantity_purchased: quantity,
               quantity_remaining: quantity,
               payment_transaction_id: transactionId,

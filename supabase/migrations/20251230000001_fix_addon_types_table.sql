@@ -56,6 +56,12 @@ CREATE POLICY "Users can read their own addon credits"
   TO authenticated
   USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can insert their own addon credits"
+  ON public.user_addon_credits
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Service role can insert addon credits"
   ON public.user_addon_credits
   FOR INSERT
@@ -67,6 +73,12 @@ CREATE POLICY "Service role can update addon credits"
   FOR UPDATE
   TO service_role
   USING (true);
+
+CREATE POLICY "Users can update their own addon credits"
+  ON public.user_addon_credits
+  FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = user_id);
 
 -- Insert addon types (upsert to avoid duplicates)
 INSERT INTO public.addon_types (name, type_key, unit_price, description)
