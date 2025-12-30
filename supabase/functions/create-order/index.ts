@@ -179,14 +179,14 @@ const addOns = [
   {
     id: 'jd_optimization_single_purchase',
     name: 'JD-Based Optimization (1 Use)',
-    price: 49,
+    price: 19,
     type: 'optimization',
     quantity: 1,
   },
   {
     id: 'resume_score_check_single_purchase',
     name: 'Resume Score Check (1 Use)',
-    price: 19,
+    price: 9,
     type: 'score_check',
     quantity: 1,
   },
