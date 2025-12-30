@@ -251,7 +251,7 @@ export const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({
           onSubscriptionSuccess();
           // ✅ UPDATED: Special message for CHRISTMAS coupon
           if (appliedCoupon?.code.toLowerCase() === 'christmas') {
-            onShowAlert('🎄 Christmas Offer Activated!', 'Your subscription has been activated with discount! Merry Christmas! 🎅', 'success');
+            onShowAlert('🎉 New Year Offer Activated!', 'Your subscription has been activated with discount! Happy New Year 2025! 🎊', 'success');
           } else {
             onShowAlert('Subscription Activated!', 'Your free plan has been activated successfully.', 'success');
           }

@@ -178,7 +178,7 @@ function App() {
   const handleSubscriptionSuccess = useCallback(async () => {
     setShowSubscriptionPlans(false);
     setShowPlanSelectionModal(false);
-    setSuccessMessage('🎄 Subscription activated successfully! Merry Christmas! 🎅');
+    setSuccessMessage('🎉 Subscription activated successfully! Happy New Year 2025! 🎊');
     setShowSuccessNotification(true);
     setTimeout(() => {
       setShowSuccessNotification(false);
