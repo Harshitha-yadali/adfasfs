@@ -189,16 +189,23 @@ SECTION ORDER FOR COLLEGE STUDENTS:
 
 FRESHER REQUIREMENTS:
 1. MUST include a compelling Career Objective (2 lines MAX, ATS-readable, focusing on entry-level goals, relevant skills, and aspirations)
-2. PRIORITIZE Education, Academic Projects, and Internships
-3. Include additional sections that showcase potential: Achievements, Extra-curricular Activities, Languages
-4. Focus on academic projects, internships, and transferable skills
-5. Highlight learning ability, enthusiasm, and relevant coursework
-6. ALL INTERNSHIPS, TRAININGS, and WORK EXPERIENCE should be categorized under "workExperience" section
-7. Extract CGPA from education if mentioned (e.g., "CGPA: 8.4/10")
+2. CRITICAL: DO NOT include any years of experience in the career objective (e.g., "1 year experience", "2 years of experience", "X+ years"). Freshers have NO professional experience - focus on skills, education, and eagerness to learn.
+3. PRIORITIZE Education, Academic Projects, and Internships
+4. Include additional sections that showcase potential: Achievements, Extra-curricular Activities, Languages
+5. Focus on academic projects, internships, and transferable skills
+6. Highlight learning ability, enthusiasm, and relevant coursework
+7. ALL INTERNSHIPS, TRAININGS, and WORK EXPERIENCE should be categorized under "workExperience" section
+8. Extract CGPA from education if mentioned (e.g., "CGPA: 8.4/10")
+
+CAREER OBJECTIVE FOR FRESHERS - CRITICAL RULES:
+- NEVER mention "X years of experience" or any experience duration
+- Focus on: skills learned, technologies known, career goals, eagerness to contribute
+- Example GOOD: "Motivated Computer Science graduate seeking entry-level software developer role to apply React and Node.js skills in building scalable applications."
+- Example BAD: "Software developer with 1 year experience seeking..." (WRONG - freshers don't have years of experience)
 
 SECTION ORDER FOR FRESHERS:
 1. Contact Information
-2. Career Objective (REQUIRED - 2 lines focusing on entry-level goals)
+2. Career Objective (REQUIRED - 2 lines focusing on entry-level goals, NO experience years)
 3. Technical Skills
 4. Education (PROMINENT)
 5. Internships & Work Experience (IMPORTANT - includes all internships, trainings, and work)
@@ -406,7 +413,7 @@ ${userType === 'experienced' ? `
 - Location: Include in contact information and education details
 ` : `
 - Professional Summary: OPTIONAL - only if candidate has relevant internships/experience
-- Career Objective: REQUIRED - Create a compelling 2-line objective focusing on entry-level goals.
+- Career Objective: REQUIRED - Create a compelling 2-line objective focusing on entry-level goals. CRITICAL: DO NOT include any "X years of experience" - freshers have no professional experience years.
 - Education: INCLUDE CGPA if mentioned in original resume (e.g., "CGPA: 8.4/10") and date format ex;2021-2024 
 - Academic Projects: IMPORTANT - treat as main experience section
 - Work Experience: COMBINE all internships, trainings, and work experience under this single section

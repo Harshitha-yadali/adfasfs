@@ -1206,8 +1206,24 @@ export class EnhancedJdOptimizerService {
     const role = resume.workExperience?.[0]?.role || resume.targetRole || 'Software Engineer';
     const yearsExp = Math.max(resume.workExperience?.length || 1, 1);
     
-    // Generate summary
-    const newSummary = `Results-driven ${role} with ${yearsExp}+ years of experience specializing in ${topKeywords || 'modern web technologies'}. Proven track record of delivering scalable solutions, improving system performance by 40%+, and collaborating with cross-functional teams. Strong expertise in full-stack development with a focus on clean, maintainable code and best practices.`;
+    // Detect if user is fresher/student (no significant work experience)
+    const isFresher = !resume.workExperience || resume.workExperience.length === 0 || 
+      resume.workExperience.every(exp => 
+        exp.role?.toLowerCase().includes('intern') || 
+        exp.role?.toLowerCase().includes('trainee') ||
+        exp.company?.toLowerCase().includes('university') ||
+        exp.company?.toLowerCase().includes('college')
+      );
+    
+    // Generate summary - different for freshers vs experienced
+    let newSummary: string;
+    if (isFresher) {
+      // Fresher summary - NO years of experience mentioned
+      newSummary = `Motivated ${role} seeking entry-level opportunity to apply skills in ${topKeywords || 'modern web technologies'}. Strong foundation in software development with hands-on project experience. Eager to contribute to innovative solutions and grow professionally in a dynamic team environment.`;
+    } else {
+      // Experienced summary - include years
+      newSummary = `Results-driven ${role} with ${yearsExp}+ years of experience specializing in ${topKeywords || 'modern web technologies'}. Proven track record of delivering scalable solutions, improving system performance by 40%+, and collaborating with cross-functional teams. Strong expertise in full-stack development with a focus on clean, maintainable code and best practices.`;
+    }
     
     // Check if update needed
     const existingKeywordCount = jdKeywords.filter(kw => 
